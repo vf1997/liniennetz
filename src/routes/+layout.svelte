@@ -18,6 +18,7 @@
 				href="/haltestelle/{data.user.id}"
 				class:active={page.url.pathname.startsWith('/haltestelle')}>Meine Haltestelle</a
 			>
+			<a href="/rangliste" class:active={page.url.pathname === '/rangliste'}>Rangliste</a>
 			<a href="/hilfe" class:active={page.url.pathname === '/hilfe'}>Hilfe</a>
 			<a href="/config" class:active={page.url.pathname === '/config'}>Einstellungen</a>
 		</nav>

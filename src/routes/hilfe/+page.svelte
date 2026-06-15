@@ -46,6 +46,16 @@
 				icon: '🕵️',
 				title: 'Zwei Wahrheiten, eine Lüge',
 				body: `Schreib auf deinem Profil drei Aussagen über dich – zwei wahre, eine erfundene. Wer die Lüge errät, bekommt ${s.pointsLieCorrect} Fahrgäste-Punkte – genau wie du, weil du andere zum Staunen gebracht hast.`
+			},
+			{
+				icon: '🏅',
+				title: 'Steige im Rang auf',
+				body: `Jede Aktion bringt dir Fahrgäste-Punkte – und mit ihnen einen persönlichen Rang: vom Fahrgast über den Pendler-Profi bis zur Netz-Legende. Oben auf der Stadt-Seite siehst du deinen Fortschritt, und in der „Rangliste" misst du dich mit dem Team – inklusive Abteilungs-Duell.`
+			},
+			{
+				icon: '🙋',
+				title: 'Zeig, wer du bist',
+				body: `Auf deiner eigenen Haltestelle wählst du deine Interessen selbst (hinzufügen & entfernen). So entdeckt ihr Gemeinsamkeiten – und das „Dein Netz auf einen Blick"-Panel zeigt dir deine persönlichen Zahlen und dein nächstes Ziel.`
 			}
 		];
 	}
@@ -73,6 +83,8 @@
 		{ icon: '🏆', term: 'Kür der Woche', def: 'Lebendigste Haltestelle der letzten 7 Tage.' },
 		{ icon: '👏', term: 'Applaus', def: 'Würdigt eine schöne Geste mit einem Klick.' },
 		{ icon: '🕵️', term: 'Zwei Wahrheiten, eine Lüge', def: 'Mini-Spiel auf jedem Profil: Finde die erfundene Aussage.' },
+		{ icon: '🏅', term: 'Rang', def: 'Dein persönlicher Titel nach gesammelten Fahrgäste-Punkten.' },
+		{ icon: '🏆', term: 'Rangliste', def: 'Wertung aller Haltestellen + Abteilungs-Duell.' },
 		{ icon: '🔑', term: 'Anmelde-Modus', def: 'Demo (Person per Klick) oder Slack-Login – umschaltbar in den Einstellungen.' }
 	]);
 </script>

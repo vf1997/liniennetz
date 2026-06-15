@@ -14,11 +14,11 @@
 	const W = 820;
 	const H = 540;
 
-	// Feste Plätze für die Wahrzeichen am Kartenrand
+	// Feste Plätze für die Wahrzeichen am Kartenrand (mit Platz für Sockel & Plakette)
 	const LANDMARK_POS = {
-		hauptbahnhof: { x: W / 2, y: 46 },
-		bruecke: { x: W - 88, y: H - 42 },
-		park: { x: 86, y: 66 }
+		hauptbahnhof: { x: W / 2, y: 58 },
+		bruecke: { x: W - 92, y: H - 70 },
+		park: { x: 92, y: 74 }
 	};
 
 	const positions = $derived(stationPositions(data.users, W, H));
@@ -71,13 +71,41 @@
 		return `M ${a.x} ${a.y} Q ${mx + nx * off} ${my + ny * off} ${b.x} ${b.y}`;
 	}
 
+	// Ein Bähnchen fährt über jede Linie – längere Linien = etwas langsamer
+	function tramDur(c) {
+		const a = positions[c.fromUserId];
+		const b = positions[c.toUserId];
+		if (!a || !b) return 6;
+		const dist = Math.hypot(b.x - a.x, b.y - a.y);
+		return Math.max(4, Math.min(9, dist / 70));
+	}
+
+	// Die Stadt-Kulisse im Hintergrund wächst mit der Ausbaustufe
+	// (mehr & höhere Häuser von Dorf → Metropole). Deterministisch, damit nichts flackert.
+	function buildSkyline(lvlIndex) {
+		const count = [7, 12, 18, 26][lvlIndex] ?? 7;
+		const maxH = [18, 36, 62, 98][lvlIndex] ?? 18;
+		const out = [];
+		for (let i = 0; i < count; i++) {
+			const frac = Math.abs((Math.sin(i * 12.9898) * 43758.5453) % 1);
+			const w = W / count;
+			const h = 8 + frac * maxH;
+			out.push({ x: i * w, y: H - h, w: w - 2, h });
+		}
+		return out;
+	}
+	const skyline = $derived(buildSkyline(level.index));
+
 	const enhanceTicket = () => async ({ result, update }) => {
 		await update();
 		if (result.type === 'success' && result.data?.success) {
-			if (result.data.questCompleted) fireCelebration(questMsg(result.data.questCompleted), true);
+			const d = result.data;
+			if (d.levelUp) fireCelebration(`🎉 ${d.levelUp.name} erreicht!`, true);
+			else if (d.questCompleted) fireCelebration(questMsg(d.questCompleted), true);
+			else if (d.rankUp) fireCelebration(`${d.rankUp.icon} Neuer Rang: ${d.rankUp.title}!`, true);
 			else
 				fireCelebration(
-					result.data.isNew ? 'Neue Strecke eröffnet! 🚍' : 'Fahrschein verschenkt! 🎟️',
+					d.isNew ? 'Neue Strecke eröffnet! 🚍' : 'Fahrschein verschenkt! 🎟️',
 					false
 				);
 		}
@@ -109,6 +137,27 @@
 			<a href="/config">Einstellungen</a> zurücksetzbar
 		</div>
 	{/if}
+
+	<!-- Persönlicher Rang -->
+	<section class="rank-chip">
+		<span class="rank-ic">{data.rank.icon}</span>
+		<div class="rank-body">
+			<div class="rank-line">
+				<span>Dein Rang: <strong>{data.rank.title}</strong></span>
+				<span class="rank-pts">{data.myPoints} Fahrgäste</span>
+			</div>
+			<div class="rank-bar">
+				<div class="rank-fill" style="width:{Math.round(data.rank.progress * 100)}%"></div>
+			</div>
+			<span class="rank-next">
+				{#if data.rank.next}
+					Noch <strong>{data.rank.toNext}</strong> Fahrgäste bis „{data.rank.next}"
+				{:else}
+					Höchster Rang erreicht 🌟
+				{/if}
+			</span>
+		</div>
+	</section>
 
 	<!-- Statuszeile -->
 	<section class="stats">
@@ -194,6 +243,13 @@
 		</div>
 
 		<svg viewBox="0 0 {W} {H}" class="map" role="img" aria-label="Karte des Teamnetzes">
+			<!-- Stadt-Kulisse im Hintergrund (wächst mit der Ausbaustufe) -->
+			<g class="skyline">
+				{#each skyline as b, i (i)}
+					<rect x={b.x} y={b.y} width={b.w} height={b.h} rx="2" />
+				{/each}
+			</g>
+
 			<!-- Linien -->
 			{#each lines as c (c.id)}
 				<path
@@ -205,8 +261,22 @@
 				/>
 			{/each}
 
+			<!-- Bähnchen, die über die Linien fahren -->
+			{#each lines as c (c.id)}
+				{#if pathFor(c)}
+					<circle class="tram" r="3.6" fill={colorForValue(c.valueTag)}>
+						<animateMotion
+							dur="{tramDur(c)}s"
+							repeatCount="indefinite"
+							path={pathFor(c)}
+							begin="-{c.id % 7}s"
+						/>
+					</circle>
+				{/if}
+			{/each}
+
 			<!-- Haltestellen -->
-			{#each data.users as u (u.id)}
+			{#each data.users as u, i (u.id)}
 				{#if positions[u.id]}
 					<a href="/haltestelle/{u.id}" class="station-link">
 						<g
@@ -217,6 +287,12 @@
 							{#if data.starOfWeek && data.starOfWeek.id === u.id}
 								<text class="crown" text-anchor="middle" y="-27">👑</text>
 							{/if}
+							<circle
+								class="halo"
+								r="20"
+								fill={monogramColor(u.name)}
+								style="animation-delay:{(i % 5) * -0.8}s"
+							/>
 							<circle r="20" fill={monogramColor(u.name)} class="dot" />
 							<text class="initials" text-anchor="middle" dy="0.34em">{monogram(u.name)}</text>
 							{#if u.decoration && decorationByKey(u.decoration)}
@@ -228,12 +304,18 @@
 				{/if}
 			{/each}
 
-			<!-- Freigeschaltete Wahrzeichen -->
+			<!-- Freigeschaltete Wahrzeichen – als platzierte Monumente -->
 			{#each data.landmarks as key (key)}
 				{#if LANDMARK_POS[key]}
 					<g class="landmark" transform="translate({LANDMARK_POS[key].x} {LANDMARK_POS[key].y})">
-						<text class="lm-icon" text-anchor="middle" dy="0.32em">{LANDMARKS[key]?.icon}</text>
-						<text class="lm-label" text-anchor="middle" y="26">{LANDMARKS[key]?.label}</text>
+						<ellipse class="lm-shadow" cx="0" cy="23" rx="28" ry="7" />
+						<circle class="lm-disc" r="25" />
+						<circle class="lm-ring" r="25" />
+						<text class="lm-icon" text-anchor="middle" dy="0.34em">{LANDMARKS[key]?.icon}</text>
+						<g transform="translate(0 42)">
+							<rect class="lm-plate" x="-48" y="-11" width="96" height="22" rx="11" />
+							<text class="lm-label" text-anchor="middle" dy="0.32em">{LANDMARKS[key]?.label}</text>
+						</g>
 					</g>
 				{/if}
 			{/each}
@@ -396,6 +478,73 @@
 		font-weight: 600;
 		font-size: 1.3rem;
 		margin: 0 0 4px;
+	}
+
+	/* Persönlicher Rang */
+	.rank-chip {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		background: linear-gradient(135deg, #1a1a1a, #2e2a26);
+		color: #f4f1ea;
+		border-radius: 14px;
+		padding: 14px 18px;
+		margin-bottom: 14px;
+		box-shadow: 0 18px 40px -30px rgba(60, 40, 20, 0.7);
+	}
+
+	.rank-ic {
+		font-size: 1.9rem;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+
+	.rank-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.rank-line {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 10px;
+		font-size: 0.95rem;
+	}
+
+	.rank-line strong {
+		font-family: 'Fraunces', serif;
+		font-weight: 600;
+	}
+
+	.rank-pts {
+		font-size: 0.8rem;
+		color: #c9c1b4;
+		white-space: nowrap;
+	}
+
+	.rank-bar {
+		height: 7px;
+		background: rgba(255, 255, 255, 0.16);
+		border-radius: 99px;
+		overflow: hidden;
+		margin: 8px 0 6px;
+	}
+
+	.rank-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #c89b3c, #e0b85a);
+		border-radius: 99px;
+		transition: width 0.7s ease;
+	}
+
+	.rank-next {
+		font-size: 0.78rem;
+		color: #c9c1b4;
+	}
+
+	.rank-next strong {
+		color: #e0b85a;
 	}
 
 	/* Statuszeile */
@@ -622,6 +771,45 @@
 		border-radius: 12px;
 	}
 
+	/* Stadt-Kulisse im Hintergrund */
+	.skyline rect {
+		fill: #cfc6b4;
+		opacity: 0.16;
+	}
+
+	/* Bähnchen, die über die Linien fahren */
+	.tram {
+		filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.18));
+	}
+
+	/* Sanft pulsierender Halo um jede Haltestelle */
+	.station .halo {
+		opacity: 0;
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: pulse 4s ease-out infinite;
+		pointer-events: none;
+	}
+
+	.station.me .halo {
+		animation-duration: 2.8s;
+	}
+
+	@keyframes pulse {
+		0% {
+			opacity: 0.32;
+			transform: scale(0.7);
+		}
+		70% {
+			opacity: 0;
+			transform: scale(2.1);
+		}
+		100% {
+			opacity: 0;
+			transform: scale(2.1);
+		}
+	}
+
 	.line {
 		fill: none;
 		stroke-width: 3.4;
@@ -689,14 +877,38 @@
 		r: 23;
 	}
 
-	/* Wahrzeichen auf der Karte */
+	/* Wahrzeichen auf der Karte – platzierte Monumente */
+	.landmark {
+		pointer-events: none;
+	}
+
+	.lm-shadow {
+		fill: rgba(60, 40, 20, 0.16);
+	}
+
+	.lm-disc {
+		fill: #fffdf8;
+		filter: drop-shadow(0 5px 9px rgba(60, 40, 20, 0.28));
+	}
+
+	.lm-ring {
+		fill: none;
+		stroke: #c89b3c;
+		stroke-width: 2.5;
+		opacity: 0.95;
+	}
+
 	.landmark .lm-icon {
-		font-size: 30px;
+		font-size: 26px;
+	}
+
+	.lm-plate {
+		fill: #1a1a1a;
 	}
 
 	.landmark .lm-label {
-		fill: #4a443c;
-		font-size: 11px;
+		fill: #f4f1ea;
+		font-size: 10.5px;
 		font-family: 'IBM Plex Mono', monospace;
 		font-weight: 500;
 	}

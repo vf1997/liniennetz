@@ -55,6 +55,35 @@ export const LANDMARKS = {
 	park: { icon: '🌳', label: 'Stadtpark' }
 };
 
+// Persönliche Ränge nach gesammelten Fahrgäste-Punkten (Gamification).
+export const RANKS = [
+	{ min: 0, title: 'Fahrgast', icon: '🎫' },
+	{ min: 25, title: 'Stammgast', icon: '🎟️' },
+	{ min: 60, title: 'Pendler-Profi', icon: '🚉' },
+	{ min: 120, title: 'Streckenkenner', icon: '🧭' },
+	{ min: 220, title: 'Netz-Legende', icon: '🌟' }
+];
+
+// Liefert den aktuellen Rang + Fortschritt zum nächsten.
+export function rankFor(points) {
+	const p = points || 0;
+	let idx = 0;
+	for (let i = 0; i < RANKS.length; i++) if (p >= RANKS[i].min) idx = i;
+	const cur = RANKS[idx];
+	const next = RANKS[idx + 1] ?? null;
+	const progress = next ? (p - cur.min) / (next.min - cur.min) : 1;
+	return {
+		title: cur.title,
+		icon: cur.icon,
+		index: idx,
+		points: p,
+		next: next ? next.title : null,
+		nextAt: next ? next.min : null,
+		toNext: next ? Math.max(0, next.min - p) : 0,
+		progress: Math.max(0, Math.min(1, progress))
+	};
+}
+
 // Deko für die eigene Haltestelle – wird über gesammelte Fahrgäste-Punkte freigeschaltet
 export const DECORATIONS = [
 	{ key: 'baum', icon: '🌳', label: 'Baum', cost: 0 },

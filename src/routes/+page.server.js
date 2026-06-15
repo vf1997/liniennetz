@@ -12,7 +12,7 @@ import {
 	quests,
 	claps
 } from '$lib/server/db/schema.js';
-import { getWeekKey, normalizeAnswer, netzStufe } from '$lib/netz.js';
+import { getWeekKey, normalizeAnswer, netzStufe, rankFor } from '$lib/netz.js';
 import { getSettings, demoNow } from '$lib/server/settings.js';
 
 function todayStr(d = new Date()) {
@@ -76,6 +76,13 @@ export async function load({ locals }) {
 		grossstadt: settings.levelGrossstadt,
 		metropole: settings.levelMetropole
 	});
+
+	// Mein persönlicher Rang (nach gesammelten Fahrgäste-Punkten)
+	const myPoints = (await db.select().from(points).where(eq(points.userId, me.id))).reduce(
+		(s, p) => s + p.amount,
+		0
+	);
+	const rank = rankFor(myPoints);
 
 	// Wie viele Fahrscheine hat die Person diese Woche noch?
 	const budgetRow = (
@@ -202,6 +209,8 @@ export async function load({ locals }) {
 		users: allUsers,
 		connections: allConnections,
 		level,
+		myPoints,
+		rank,
 		ticketsRemaining,
 		ticketsPerWeek: settings.ticketsPerWeek,
 		values: settings.firmenwerte,
@@ -272,6 +281,17 @@ export const actions = {
 			);
 		const isNew = existing.length === 0;
 
+		// Für die Feier: Netz-Linienzahl & meine Punkte VOR dem Bau festhalten
+		const wsUsers = await db.select().from(users).where(eq(users.workspaceId, me.workspaceId));
+		const wsIds = new Set(wsUsers.map((u) => u.id));
+		const allConns = await db.select().from(connections);
+		const lineCountBefore = allConns.filter(
+			(c) => wsIds.has(c.fromUserId) && wsIds.has(c.toUserId)
+		).length;
+		const myPointsBefore = (
+			await db.select().from(points).where(eq(points.userId, me.id))
+		).reduce((s, p) => s + p.amount, 0);
+
 		const inserted = await db
 			.insert(connections)
 			.values({
@@ -289,17 +309,34 @@ export const actions = {
 			.set({ remaining: budget.remaining - 1 })
 			.where(and(eq(ticketBudgets.userId, me.id), eq(ticketBudgets.week, week)));
 
+		const gain = isNew ? settings.pointsNewStrecke : settings.pointsGiveTicket;
 		await db.insert(points).values({
 			userId: me.id,
-			amount: isNew ? settings.pointsNewStrecke : settings.pointsGiveTicket,
+			amount: gain,
 			reason: isNew ? 'neue_strecke' : 'fahrschein_gegeben'
 		});
 		await db
 			.insert(points)
 			.values({ userId: toUserId, amount: settings.pointsReceiveTicket, reason: 'fahrschein_erhalten' });
 
+		// Hebt die neue Linie das ganze Netz auf die nächste Ausbaustufe?
+		const thresholds = {
+			kleinstadt: settings.levelKleinstadt,
+			grossstadt: settings.levelGrossstadt,
+			metropole: settings.levelMetropole
+		};
+		const stufeNach = netzStufe(lineCountBefore + 1, thresholds);
+		const levelUp =
+			stufeNach.index > netzStufe(lineCountBefore, thresholds).index ? { name: stufeNach.name } : null;
+
+		// Steige ICH durch die Punkte in einen neuen Rang auf?
+		const rankBefore = rankFor(myPointsBefore);
+		const rankAfter = rankFor(myPointsBefore + gain);
+		const rankUp =
+			rankAfter.index > rankBefore.index ? { title: rankAfter.title, icon: rankAfter.icon } : null;
+
 		const questCompleted = await maybeCompleteQuest(me.workspaceId);
-		return { success: true, isNew, newConnectionId: inserted[0].id, questCompleted };
+		return { success: true, isNew, newConnectionId: inserted[0].id, questCompleted, levelUp, rankUp };
 	},
 
 	// Frage des Tages beantworten

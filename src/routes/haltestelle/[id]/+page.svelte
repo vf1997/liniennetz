@@ -24,9 +24,68 @@
 			<div class="meta">
 				<span><strong>{data.points}</strong> Fahrgäste</span>
 				<span><strong>{data.connectionCount}</strong> Linien</span>
+				<span class="rank-tag">{data.rank.icon} {data.rank.title}</span>
+			</div>
+			<div class="rank-mini">
+				<div class="rank-mini-bar">
+					<div class="rank-mini-fill" style="width:{Math.round(data.rank.progress * 100)}%"></div>
+				</div>
+				<span class="rank-mini-label">
+					{#if data.rank.next}
+						noch {data.rank.toNext} bis „{data.rank.next}"
+					{:else}
+						höchster Rang 🌟
+					{/if}
+				</span>
 			</div>
 		</div>
 	</header>
+
+	{#if data.isSelf && data.rueckblick}
+		<section class="card rueckblick">
+			<h2>Dein Netz auf einen Blick 📊</h2>
+			<div class="rb-grid">
+				<div class="rb-tile">
+					<span class="rb-num">{data.rueckblick.given}</span>
+					<span class="rb-cap">Fahrscheine verschenkt</span>
+				</div>
+				<div class="rb-tile">
+					<span class="rb-num">{data.rueckblick.received}</span>
+					<span class="rb-cap">Fahrscheine erhalten</span>
+				</div>
+				<div class="rb-tile">
+					<span class="rb-num">{data.rank.icon}</span>
+					<span class="rb-cap">Rang: {data.rank.title}</span>
+				</div>
+				<div class="rb-tile">
+					<span class="rb-num small">{data.rueckblick.favValue ?? '–'}</span>
+					<span class="rb-cap">am häufigsten gewürdigt für</span>
+				</div>
+				{#if data.rueckblick.topPartner}
+					<div class="rb-tile">
+						<a class="rb-num small link" href="/haltestelle/{data.rueckblick.topPartner.id}"
+							>{data.rueckblick.topPartner.name.split(' ')[0]}</a
+						>
+						<span class="rb-cap">engste Verbindung</span>
+					</div>
+				{/if}
+				<div class="rb-tile goal">
+					{#if data.rueckblick.nextAch}
+						<span class="rb-num small">{data.rueckblick.nextAch.icon} {data.rueckblick.nextAch.name}</span>
+						<span class="rb-cap">
+							nächstes Ziel · {data.rueckblick.nextAch.cur}/{data.rueckblick.nextAch.goal}
+						</span>
+					{:else if data.rank.next}
+						<span class="rb-num small">{data.rank.toNext} bis {data.rank.next}</span>
+						<span class="rb-cap">nächstes Ziel</span>
+					{:else}
+						<span class="rb-num small">Alles erreicht 🌟</span>
+						<span class="rb-cap">starke Leistung!</span>
+					{/if}
+				</div>
+			</div>
+		</section>
+	{/if}
 
 	{#if data.isSelf}
 		<section class="card werkstatt">
@@ -182,22 +241,63 @@
 		</section>
 	{/if}
 
-	{#if data.badges.length}
-		<section class="card">
-			<h2>Abzeichen</h2>
-			<div class="badges">
-				{#each data.badges as b (b.name)}
-					<div class="badge" title={b.desc}>
-						<span class="badge-icon">{b.icon}</span>
-						<span class="badge-name">{b.name}</span>
-						<span class="badge-desc">{b.desc}</span>
-					</div>
-				{/each}
-			</div>
-		</section>
-	{/if}
+	<section class="card">
+		<h2>Abzeichen <span class="badge-count">{data.badges.length}/{data.achievements.length}</span></h2>
+		<div class="badges">
+			{#each data.achievements as b (b.name)}
+				<div class="badge" class:locked={!b.earned} title={b.desc}>
+					<span class="badge-icon">{b.icon}</span>
+					<span class="badge-name">{b.name}</span>
+					<span class="badge-desc">{b.desc}</span>
+					{#if b.earned}
+						<span class="badge-got">✓ erreicht</span>
+					{:else}
+						<div class="badge-bar">
+							<div class="badge-fill" style="width:{Math.round((b.cur / b.goal) * 100)}%"></div>
+						</div>
+						<span class="badge-prog">{b.cur}/{b.goal}</span>
+					{/if}
+				</div>
+			{/each}
+		</div>
+	</section>
 
-	{#if data.interests.length}
+	{#if data.isSelf}
+		<section class="card">
+			<h2>Meine Interessen</h2>
+			<p class="card-hint">
+				Wähle, was dich ausmacht – so findet ihr leichter Gemeinsamkeiten und Gesprächsanlässe.
+			</p>
+			<div class="tags">
+				{#each data.interests as tag (tag)}
+					<span class="tag editable">
+						{tag}
+						<form method="POST" action="?/interesseEntfernen" use:enhance>
+							<input type="hidden" name="tag" value={tag} />
+							<button type="submit" class="tag-x" title="Entfernen" aria-label="„{tag}“ entfernen"
+								>×</button
+							>
+						</form>
+					</span>
+				{/each}
+				{#if !data.interests.length}
+					<span class="card-hint">Noch keine Interessen – füg dein erstes hinzu!</span>
+				{/if}
+			</div>
+			<form method="POST" action="?/interesseHinzufuegen" use:enhance class="interest-add">
+				<input
+					name="tag"
+					placeholder="z. B. Wandern, Filterkaffee, Brettspiele …"
+					autocomplete="off"
+					maxlength="30"
+				/>
+				<button type="submit" class="primary">Hinzufügen</button>
+			</form>
+			{#if form?.interestError}
+				<p class="error">{form.interestError}</p>
+			{/if}
+		</section>
+	{:else if data.interests.length}
 		<section class="card">
 			<h2>Interessen</h2>
 			<div class="tags">
@@ -301,14 +401,114 @@
 
 	.meta {
 		display: flex;
-		gap: 18px;
+		align-items: center;
+		gap: 14px;
 		font-size: 0.92rem;
 		color: #4a443c;
+		flex-wrap: wrap;
 	}
 
 	.meta strong {
 		font-family: 'Fraunces', serif;
 		font-size: 1.05rem;
+	}
+
+	.rank-tag {
+		background: #1a1a1a;
+		color: #f4f1ea;
+		padding: 4px 11px;
+		border-radius: 999px;
+		font-size: 0.82rem;
+		font-weight: 600;
+	}
+
+	.rank-mini {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 10px;
+		max-width: 320px;
+	}
+
+	.rank-mini-bar {
+		flex: 1;
+		height: 6px;
+		background: #ece4d6;
+		border-radius: 99px;
+		overflow: hidden;
+	}
+
+	.rank-mini-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #c89b3c, #e0b85a);
+		border-radius: 99px;
+		transition: width 0.7s ease;
+	}
+
+	.rank-mini-label {
+		font-size: 0.76rem;
+		color: #79736a;
+		white-space: nowrap;
+	}
+
+	/* Persönlicher Rückblick */
+	.rueckblick {
+		background: linear-gradient(135deg, #fffdf8, #fbf3ec);
+	}
+
+	.rb-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: 12px;
+	}
+
+	.rb-tile {
+		background: #fff;
+		border: 1px solid #ece3d3;
+		border-radius: 12px;
+		padding: 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		text-align: center;
+		align-items: center;
+	}
+
+	.rb-tile.goal {
+		background: #1a1a1a;
+		border-color: #1a1a1a;
+	}
+
+	.rb-tile.goal .rb-num,
+	.rb-tile.goal .rb-cap {
+		color: #f4f1ea;
+	}
+
+	.rb-num {
+		font-family: 'Fraunces', serif;
+		font-weight: 900;
+		font-size: 1.7rem;
+		color: #b5462f;
+		line-height: 1.1;
+	}
+
+	.rb-num.small {
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	.rb-num.link {
+		text-decoration: none;
+	}
+
+	.rb-num.link:hover {
+		text-decoration: underline;
+	}
+
+	.rb-cap {
+		font-size: 0.74rem;
+		color: #79736a;
+		line-height: 1.3;
 	}
 
 	.card {
@@ -417,7 +617,30 @@
 		text-align: center;
 		display: flex;
 		flex-direction: column;
+		align-items: center;
 		gap: 3px;
+	}
+
+	.badge.locked {
+		background: #f6f2ea;
+		border-style: dashed;
+		border-color: #ddd3c2;
+	}
+
+	.badge.locked .badge-icon {
+		filter: grayscale(1);
+		opacity: 0.5;
+	}
+
+	.badge.locked .badge-name {
+		color: #9a948a;
+	}
+
+	.badge-count {
+		font-family: 'IBM Plex Mono', monospace;
+		font-size: 0.82rem;
+		color: #79736a;
+		font-weight: 400;
 	}
 
 	.badge-icon {
@@ -434,6 +657,35 @@
 		font-size: 0.76rem;
 		color: #79736a;
 		line-height: 1.35;
+	}
+
+	.badge-got {
+		font-size: 0.74rem;
+		font-weight: 600;
+		color: #2e7d4f;
+		margin-top: 4px;
+	}
+
+	.badge-bar {
+		width: 100%;
+		height: 6px;
+		background: #e7ded0;
+		border-radius: 99px;
+		overflow: hidden;
+		margin-top: 8px;
+	}
+
+	.badge-fill {
+		height: 100%;
+		background: #c89b3c;
+		border-radius: 99px;
+	}
+
+	.badge-prog {
+		font-size: 0.72rem;
+		color: #79736a;
+		font-family: 'IBM Plex Mono', monospace;
+		margin-top: 3px;
 	}
 
 	.tags {
@@ -460,6 +712,78 @@
 		background: #f7e0d9;
 		color: #9c3a26;
 		font-weight: 600;
+	}
+
+	.tag.editable {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding-right: 6px;
+	}
+
+	.tag.editable form {
+		display: inline;
+	}
+
+	.tag-x {
+		border: none;
+		background: #e3d6c6;
+		color: #6b5f4f;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		font-size: 0.95rem;
+		line-height: 1;
+		cursor: pointer;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		font-family: inherit;
+	}
+
+	.tag-x:hover {
+		background: #d8b8ad;
+		color: #9c3a26;
+	}
+
+	.interest-add {
+		display: flex;
+		gap: 8px;
+		margin-top: 14px;
+	}
+
+	.interest-add input {
+		flex: 1;
+		padding: 10px 13px;
+		border: 1px solid #d8d0c0;
+		border-radius: 9px;
+		font-size: 0.95rem;
+		font-family: inherit;
+		background: #fff;
+		color: #1a1a1a;
+	}
+
+	.interest-add input:focus {
+		outline: none;
+		border-color: #b5462f;
+		box-shadow: 0 0 0 3px rgba(181, 70, 47, 0.12);
+	}
+
+	.primary {
+		background: #b5462f;
+		color: #fff;
+		border: none;
+		padding: 10px 18px;
+		border-radius: 9px;
+		font-weight: 600;
+		font-size: 0.92rem;
+		cursor: pointer;
+		font-family: inherit;
+		white-space: nowrap;
+	}
+
+	.primary:hover {
+		background: #9c3a26;
 	}
 
 	.quotes {

@@ -10,7 +10,7 @@ import {
 	truths,
 	guesses
 } from '$lib/server/db/schema.js';
-import { DECORATIONS, decorationByKey } from '$lib/netz.js';
+import { DECORATIONS, decorationByKey, rankFor } from '$lib/netz.js';
 import { getSettings } from '$lib/server/settings.js';
 
 // Effektive Deko-Kosten aus den Einstellungen
@@ -62,36 +62,23 @@ export async function load({ params, locals }) {
 
 	const budgets = await db.select().from(ticketBudgets).where(eq(ticketBudgets.userId, id));
 
-	// Abzeichen aus den vorhandenen Daten berechnen
-	const badges = [];
+	// Roh-Kennzahlen für die Achievements (inkl. Fortschritt)
 	const partners = myConnections.map((c) => (c.fromUserId === id ? c.toUserId : c.fromUserId));
 	const crossDept = partners.some(
 		(pid) => userById[pid] && userById[pid].department !== person.department
 	);
-	if (crossDept)
-		badges.push({ icon: '🌉', name: 'Brückenbauer', desc: 'Verbindet verschiedene Abteilungen' });
-
 	const rueckenstaerker = myConnections.filter(
 		(c) => c.toUserId === id && c.valueTag === teamWert
 	).length;
-	if (rueckenstaerker >= 3)
-		badges.push({ icon: '🛟', name: 'Rückenstärker', desc: `3× für „${teamWert}" gewürdigt` });
-
 	const distinctDays = new Set(myConnections.map((c) => new Date(c.createdAt).toDateString())).size;
-	if (distinctDays >= 3)
-		badges.push({ icon: '☕', name: 'Stammgast', desc: 'An mehreren Tagen im Netz unterwegs' });
-
 	// "Stadtgründer": die ersten vier Mitglieder eines Workspaces (unabhängig von den IDs)
 	const founderIds = allUsers
 		.filter((u) => u.workspaceId === person.workspaceId)
 		.sort((a, b) => a.id - b.id)
 		.slice(0, 4)
 		.map((u) => u.id);
-	if (founderIds.includes(id))
-		badges.push({ icon: '🏗️', name: 'Stadtgründer', desc: 'Von Anfang an dabei' });
-
-	if (budgets.some((b) => b.remaining === 0))
-		badges.push({ icon: '🎁', name: 'Großzügig', desc: 'Alle Fahrscheine einer Woche verschenkt' });
+	const isFounder = founderIds.includes(id);
+	const wasGenerous = budgets.some((b) => b.remaining === 0);
 
 	const quotes = myConnections
 		.filter((c) => c.toUserId === id && c.message)
@@ -156,16 +143,50 @@ export async function load({ params, locals }) {
 		};
 	}
 
-	// Abzeichen "Lügen-Detektiv": mindestens 3 Lügen richtig erraten
 	const personGuesses = await db.select().from(guesses).where(eq(guesses.userId, id));
-	if (personGuesses.filter((g) => g.correct).length >= 3)
-		badges.push({ icon: '🕵️', name: 'Lügen-Detektiv', desc: '3× eine Lüge enttarnt' });
+	const correctGuesses = personGuesses.filter((g) => g.correct).length;
+
+	// Alle Achievements mit Fortschritt – erreichte UND noch offene (mit „x/y")
+	const achievements = [
+		{ icon: '🌉', name: 'Brückenbauer', desc: 'Verbindet verschiedene Abteilungen', earned: crossDept, cur: crossDept ? 1 : 0, goal: 1 },
+		{ icon: '🛟', name: 'Rückenstärker', desc: `3× für „${teamWert}" gewürdigt`, earned: rueckenstaerker >= 3, cur: Math.min(rueckenstaerker, 3), goal: 3 },
+		{ icon: '☕', name: 'Stammgast', desc: 'An 3 verschiedenen Tagen aktiv', earned: distinctDays >= 3, cur: Math.min(distinctDays, 3), goal: 3 },
+		{ icon: '🕵️', name: 'Lügen-Detektiv', desc: '3× eine Lüge enttarnt', earned: correctGuesses >= 3, cur: Math.min(correctGuesses, 3), goal: 3 },
+		{ icon: '🏗️', name: 'Stadtgründer', desc: 'Von Anfang an dabei', earned: isFounder, cur: isFounder ? 1 : 0, goal: 1 },
+		{ icon: '🎁', name: 'Großzügig', desc: 'Alle Fahrscheine einer Woche verschenkt', earned: wasGenerous, cur: wasGenerous ? 1 : 0, goal: 1 }
+	];
+	const badges = achievements.filter((a) => a.earned);
+
+	// "Dein Netz auf einen Blick" – persönlicher Rückblick (nur auf dem eigenen Profil)
+	let rueckblick = null;
+	if (isSelf) {
+		const given = myConnections.filter((c) => c.fromUserId === id).length;
+		const received = myConnections.filter((c) => c.toUserId === id).length;
+		const valCount = {};
+		for (const c of myConnections)
+			if (c.toUserId === id && c.valueTag) valCount[c.valueTag] = (valCount[c.valueTag] ?? 0) + 1;
+		const favValue = Object.entries(valCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+		const partnerCount = {};
+		for (const c of myConnections) {
+			const other = c.fromUserId === id ? c.toUserId : c.fromUserId;
+			partnerCount[other] = (partnerCount[other] ?? 0) + 1;
+		}
+		const topId = Object.entries(partnerCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+		const topPartner = topId
+			? { id: Number(topId), name: userById[topId]?.name ?? '?' }
+			: null;
+		const nextAch = achievements.find((a) => !a.earned) ?? null;
+		rueckblick = { given, received, favValue, topPartner, nextAch };
+	}
 
 	return {
 		person,
 		interests: myInterests,
 		points: pts,
+		rank: rankFor(pts),
+		rueckblick,
 		badges,
+		achievements,
 		quotes,
 		lines,
 		connectionCount: myConnections.length,
@@ -177,6 +198,36 @@ export async function load({ params, locals }) {
 }
 
 export const actions = {
+	// Ein eigenes Interesse hinzufügen
+	interesseHinzufuegen: async ({ request, locals, params }) => {
+		const me = locals.user;
+		const id = Number(params.id);
+		if (!me || me.id !== id)
+			return fail(403, { interestError: 'Du kannst nur deine eigenen Interessen ändern.' });
+		const tag = String((await request.formData()).get('tag') || '')
+			.trim()
+			.slice(0, 30);
+		if (!tag) return fail(400, { interestError: 'Bitte etwas eingeben.' });
+		const existing = await db.select().from(interests).where(eq(interests.userId, id));
+		if (existing.some((r) => r.tag.toLowerCase() === tag.toLowerCase()))
+			return fail(400, { interestError: 'Das Interesse hast du schon.' });
+		if (existing.length >= 12)
+			return fail(400, { interestError: 'Mehr als 12 Interessen gehen nicht.' });
+		await db.insert(interests).values({ userId: id, tag });
+		return { interestAdded: true };
+	},
+
+	// Ein eigenes Interesse entfernen
+	interesseEntfernen: async ({ request, locals, params }) => {
+		const me = locals.user;
+		const id = Number(params.id);
+		if (!me || me.id !== id)
+			return fail(403, { interestError: 'Du kannst nur deine eigenen Interessen ändern.' });
+		const tag = String((await request.formData()).get('tag') || '');
+		await db.delete(interests).where(and(eq(interests.userId, id), eq(interests.tag, tag)));
+		return { interestRemoved: true };
+	},
+
 	// Eigene Aussagen für "Zwei Wahrheiten, eine Lüge" speichern
 	speichern: async ({ request, locals, params }) => {
 		const me = locals.user;

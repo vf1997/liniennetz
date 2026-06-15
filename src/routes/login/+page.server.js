@@ -1,5 +1,6 @@
 import { fail, redirect, error } from '@sveltejs/kit';
 import crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema.js';
 import { getSlackConfig, createSession, setSessionCookie } from '$lib/server/auth.js';
@@ -23,6 +24,8 @@ export const actions = {
 		const data = await request.formData();
 		const userId = Number(data.get('userId'));
 		if (!userId) return fail(400, { error: 'Keine Person gewählt.' });
+		const exists = (await db.select().from(users).where(eq(users.id, userId)))[0];
+		if (!exists) return fail(400, { error: 'Diese Person gibt es nicht mehr.' });
 		const token = await createSession(userId);
 		setSessionCookie(cookies, token);
 		throw redirect(303, '/');
