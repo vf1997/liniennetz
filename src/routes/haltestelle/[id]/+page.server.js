@@ -34,7 +34,7 @@ export async function load({ params, locals }) {
 	}
 
 	const settings = await getSettings();
-	const schichtWert = settings.firmenwerte[0] ?? 'Füreinander da';
+	const teamWert = settings.firmenwerte[0] ?? 'Füreinander da';
 	const costs = decoCosts(settings);
 	const decorations = DECORATIONS.map((d) => ({
 		key: d.key,
@@ -71,17 +71,24 @@ export async function load({ params, locals }) {
 	if (crossDept)
 		badges.push({ icon: '🌉', name: 'Brückenbauer', desc: 'Verbindet verschiedene Abteilungen' });
 
-	const schichtRetter = myConnections.filter(
-		(c) => c.toUserId === id && c.valueTag === schichtWert
+	const rueckenstaerker = myConnections.filter(
+		(c) => c.toUserId === id && c.valueTag === teamWert
 	).length;
-	if (schichtRetter >= 3)
-		badges.push({ icon: '🛟', name: 'Schicht-Retter', desc: `3× für „${schichtWert}" gewürdigt` });
+	if (rueckenstaerker >= 3)
+		badges.push({ icon: '🛟', name: 'Rückenstärker', desc: `3× für „${teamWert}" gewürdigt` });
 
 	const distinctDays = new Set(myConnections.map((c) => new Date(c.createdAt).toDateString())).size;
 	if (distinctDays >= 3)
 		badges.push({ icon: '☕', name: 'Stammgast', desc: 'An mehreren Tagen im Netz unterwegs' });
 
-	if (id <= 4) badges.push({ icon: '🏗️', name: 'Stadtgründer', desc: 'Von Anfang an dabei' });
+	// "Stadtgründer": die ersten vier Mitglieder eines Workspaces (unabhängig von den IDs)
+	const founderIds = allUsers
+		.filter((u) => u.workspaceId === person.workspaceId)
+		.sort((a, b) => a.id - b.id)
+		.slice(0, 4)
+		.map((u) => u.id);
+	if (founderIds.includes(id))
+		badges.push({ icon: '🏗️', name: 'Stadtgründer', desc: 'Von Anfang an dabei' });
 
 	if (budgets.some((b) => b.remaining === 0))
 		badges.push({ icon: '🎁', name: 'Großzügig', desc: 'Alle Fahrscheine einer Woche verschenkt' });

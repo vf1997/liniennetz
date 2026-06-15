@@ -140,8 +140,8 @@ export const SETTING_DEFS = [
 		group: 'Inhalte',
 		label: 'Firmenwerte (mit Komma getrennt)',
 		type: 'list',
-		default: 'Füreinander da, Sicher unterwegs, Fahrgast zuerst, Tüftlergeist, Pünktlich & verlässlich',
-		help: 'Diese Werte kann man an einen Fahrschein hängen. Der erste Wert in der Liste gilt als „Schicht-Hilfe" und vergibt das Abzeichen „Schicht-Retter".'
+		default: 'Füreinander da, Software mit Herz, Gemeinsam wegweisend, Tüftlergeist, Fahrgast im Blick',
+		help: 'Diese Werte kann man an einen Fahrschein hängen. Der erste Wert in der Liste gilt als besonderer Teamwert und vergibt das Abzeichen „Rückenstärker".'
 	},
 	{
 		// versteckt: wird nicht im normalen Formular gezeigt, sondern über die Demo-Zeitmaschine gesteuert

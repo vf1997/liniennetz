@@ -10,7 +10,10 @@ import {
 	interests,
 	points,
 	quests,
-	claps
+	claps,
+	truths,
+	guesses,
+	sessions
 } from '../src/lib/server/db/schema.js';
 import { getWeekKey } from '../src/lib/netz.js';
 
@@ -44,6 +47,22 @@ const client = createClient({
 });
 const db = drizzle(client);
 
+// Vorhandene Daten leeren, damit erneutes Seeden sauber ERSETZT (nicht dupliziert).
+// Reihenfolge: erst abhängige Tabellen, dann die referenzierten.
+// Hinweis: die Einstellungen (settings) bleiben unangetastet.
+await db.delete(claps);
+await db.delete(guesses);
+await db.delete(truths);
+await db.delete(answers);
+await db.delete(points);
+await db.delete(interests);
+await db.delete(ticketBudgets);
+await db.delete(sessions);
+await db.delete(connections);
+await db.delete(questions);
+await db.delete(quests);
+await db.delete(users);
+
 function daysAgo(n) {
 	const d = new Date();
 	d.setDate(d.getDate() - n);
@@ -55,17 +74,32 @@ function todayStr(d = new Date()) {
 	).padStart(2, '0')}`;
 }
 
-// --- Personen (Mix aus Fahrdienst/Schicht und Büro) ---
+// --- Personen (interdisziplinäres Team: Produkt, Entwicklung, Beratung, Support, Design) ---
 const personas = [
-	{ name: 'Mara Lindqvist', role: 'Fahrerin Standort Süd', department: 'Fahrdienst Süd', tags: ['Wandern', 'True-Crime-Podcasts', 'Filterkaffee'] },
-	{ name: 'Tobias Krüger', role: 'Fahrer Nachtschicht', department: 'Fahrdienst Nord', tags: ['Angeln', '80er-Musik', 'Schach'] },
-	{ name: 'Aylin Demir', role: 'Disponentin', department: 'Disposition', tags: ['Yoga', 'Kochen', 'Filterkaffee'] },
-	{ name: 'Jens Hoffmann', role: 'Werkstattleiter', department: 'Werkstatt', tags: ['Schrauben', 'Heavy Metal', 'Grillen'] },
-	{ name: 'Sophie Bauer', role: 'Personalreferentin', department: 'Verwaltung', tags: ['Lesen', 'Yoga', 'Tee'] },
-	{ name: 'Ricardo Santos', role: 'Fahrer Standort Süd', department: 'Fahrdienst Süd', tags: ['Fußball', 'Kochen', 'Gitarre'] },
-	{ name: 'Petra Wagner', role: 'Buchhalterin', department: 'Verwaltung', tags: ['Gartenarbeit', 'True-Crime-Podcasts', 'Tee'] },
-	{ name: 'Daniel Fischer', role: 'Disponent', department: 'Disposition', tags: ['Radfahren', 'Fotografie', 'Filterkaffee'] }
+	{ name: 'Mara Lindqvist', role: 'Product Ownerin VIA', department: 'Produkt', tags: ['Wandern', 'True-Crime-Podcasts', 'Filterkaffee'] },
+	{ name: 'Tobias Krüger', role: 'Backend-Entwickler', department: 'Entwicklung', tags: ['Mechanical Keyboards', '80er-Musik', 'Schach'] },
+	{ name: 'Aylin Demir', role: 'Kundenberaterin', department: 'Beratung', tags: ['Yoga', 'Kochen', 'Filterkaffee'] },
+	{ name: 'Jens Hoffmann', role: 'Frontend-Entwickler', department: 'Entwicklung', tags: ['Open Source', 'Heavy Metal', 'Grillen'] },
+	{ name: 'Sophie Bauer', role: 'People & Culture', department: 'Verwaltung', tags: ['Lesen', 'Yoga', 'Tee'] },
+	{ name: 'Ricardo Santos', role: 'UX/UI Designer', department: 'Design', tags: ['Fußball', 'Kochen', 'Gitarre'] },
+	{ name: 'Petra Wagner', role: 'Support-Spezialistin', department: 'Support', tags: ['Gartenarbeit', 'True-Crime-Podcasts', 'Tee'] },
+	{ name: 'Daniel Fischer', role: 'Customer Success Manager', department: 'Beratung', tags: ['Radfahren', 'Fotografie', 'Filterkaffee'] }
 ];
+
+// E-Mail aus dem Namen auf der Firmen-Domain (vorname.nachname@stadtlandnetz.de)
+function emailFor(name) {
+	return (
+		name
+			.toLowerCase()
+			.replaceAll('ä', 'ae')
+			.replaceAll('ö', 'oe')
+			.replaceAll('ü', 'ue')
+			.replaceAll('ß', 'ss')
+			.replace(/[^a-z ]/g, '')
+			.trim()
+			.replace(/ +/g, '.') + '@stadtlandnetz.de'
+	);
+}
 
 // Ein paar Haltestellen haben schon Deko (über Index zugeordnet)
 const decoByIdx = { 0: 'cafe', 3: 'tram', 2: 'baum', 6: 'lampe' };
@@ -77,7 +111,7 @@ const insertedUsers = await db
 			slackId: `dev:seed-${i + 1}`,
 			workspaceId: 'demo',
 			name: p.name,
-			email: null,
+			email: emailFor(p.name),
 			avatarUrl: null,
 			role: p.role,
 			department: p.department,
@@ -95,21 +129,22 @@ await db.insert(interests).values(interestRows);
 
 // --- Linien (geschenkte Fahrscheine) über mehrere Tage ---
 const lineDefs = [
-	[1, 0, 'Füreinander da', 'Danke fürs Einspringen in der Spätschicht!', 0],
-	[0, 7, 'Pünktlich & verlässlich', 'Top Disposition heute!', 0],
-	[3, 0, 'Sicher unterwegs', 'Vorbildliche Fahrzeugpflege.', 0],
-	[2, 7, 'Pünktlich & verlässlich', 'Perfekte Schichtplanung.', 0],
-	[2, 0, 'Füreinander da', 'Du hast meine Tour gerettet, danke!', 1],
-	[3, 1, 'Tüftlergeist', 'Schnelle Reparatur, klasse.', 1],
-	[5, 4, 'Füreinander da', 'Danke für die schnelle Urlaubsfreigabe.', 1],
-	[4, 6, 'Füreinander da', 'Danke fürs Aushelfen in der Buchhaltung.', 1],
-	[5, 0, 'Füreinander da', 'Immer verlässlich, danke Mara.', 2],
-	[4, 2, 'Fahrgast zuerst', 'Danke für die geduldige Fahrgast-Hilfe.', 2],
-	[1, 3, 'Sicher unterwegs', 'Bremsen wieder top, danke.', 2],
-	[7, 1, 'Füreinander da', 'Nachtschicht-Held.', 2],
-	[7, 5, 'Sicher unterwegs', 'Souverän im Berufsverkehr.', 3],
-	[6, 3, 'Tüftlergeist', 'Werkstatt-Magie wie immer.', 3],
-	[2, 5, 'Fahrgast zuerst', 'Lob von Fahrgästen für dich!', 3]
+	// Mara (Index 0) bekommt 3× „Füreinander da" -> Abzeichen „Rückenstärker"
+	[2, 0, 'Füreinander da', 'Du hast meinen Kunden-Call gerettet, danke!', 1],
+	[3, 0, 'Füreinander da', 'Bist sofort eingesprungen, als das Release wackelte – danke!', 0],
+	[7, 0, 'Füreinander da', 'Immer ansprechbar für uns in der Beratung. Danke, Mara!', 2],
+	[5, 0, 'Software mit Herz', 'Dein Produkt-Gespür macht VIA richtig nahbar.', 2],
+	[0, 1, 'Tüftlergeist', 'Den fiesen NovaHub-Bug elegant gefixt – stark!', 0],
+	[3, 1, 'Tüftlergeist', 'Sauberes Code-Review, viel gelernt!', 1],
+	[1, 3, 'Gemeinsam wegweisend', 'Klasse Pairing an der heyNova-App.', 2],
+	[6, 3, 'Tüftlergeist', 'Bug sauber reproduziert und dokumentiert – top!', 3],
+	[0, 5, 'Software mit Herz', 'Dein neues Design ist einfach schön geworden.', 0],
+	[7, 5, 'Software mit Herz', 'Dein Prototyp hat den Kunden begeistert!', 3],
+	[2, 7, 'Fahrgast im Blick', 'Super Beratung beim Schulträger.', 0],
+	[4, 2, 'Fahrgast im Blick', 'Geduldige Hilfe bei den Eltern-Anfragen.', 2],
+	[2, 6, 'Füreinander da', 'Danke fürs Einspringen im Support!', 1],
+	[4, 6, 'Füreinander da', 'Danke, dass du im Support ausgeholfen hast.', 1],
+	[5, 4, 'Gemeinsam wegweisend', 'Tolles Onboarding-Material zusammengestellt.', 1]
 ];
 
 const connectionRows = lineDefs.map(([from, to, value, message, ago]) => {
@@ -150,12 +185,12 @@ await db.insert(ticketBudgets).values(
 
 // --- Fragen ---
 const questionDefs = [
-	{ text: 'Kaffee oder Tee in der Frühschicht?', activeDate: todayStr() },
-	{ text: 'Welchen Ort auf deiner Strecke magst du am liebsten?', activeDate: null },
-	{ text: 'Welcher Song darf auf einer langen Schicht nicht fehlen?', activeDate: null },
+	{ text: 'Kaffee oder Tee im Daily?', activeDate: todayStr() },
+	{ text: 'Welches unserer Produkte zeigst du Freund:innen zuerst – VIA, myVIA, NovaHub oder heyNova?', activeDate: null },
+	{ text: 'Welcher Song darf im Fokus-Modus nicht fehlen?', activeDate: null },
 	{ text: 'Was war dein allererster Job?', activeDate: null },
-	{ text: 'Wohin würdest du mit dem Bus am liebsten mal fahren?', activeDate: null },
-	{ text: 'Süßer oder herzhafter Pausensnack?', activeDate: null }
+	{ text: 'Womit planst du deinen Tag – analog oder digital?', activeDate: null },
+	{ text: 'Süßer oder herzhafter Snack im Homeoffice?', activeDate: null }
 ];
 const insertedQuestions = await db.insert(questions).values(questionDefs).returning();
 const todayQuestionId = insertedQuestions[0].id;

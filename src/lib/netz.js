@@ -4,13 +4,14 @@
  * (sie greift NICHT auf die Datenbank zu).
  */
 
-// Die Firmenwerte, an die man einen Fahrschein knüpft
+// Die Firmenwerte, an die man einen Fahrschein knüpft (bestimmt auch die Linienfarbe).
+// Sollte zur Standard-Liste in src/lib/server/settings.js (firmenwerte) passen.
 export const VALUES = [
 	'Füreinander da',
-	'Sicher unterwegs',
-	'Fahrgast zuerst',
+	'Software mit Herz',
+	'Gemeinsam wegweisend',
 	'Tüftlergeist',
-	'Pünktlich & verlässlich'
+	'Fahrgast im Blick'
 ];
 
 // Linienfarben wie bei einem U-Bahn-Plan

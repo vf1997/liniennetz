@@ -282,7 +282,7 @@
 					<span>Kurze Nachricht</span>
 					<input
 						name="message"
-						placeholder="z. B. Danke fürs Einspringen in der Spätschicht!"
+						placeholder="z. B. Danke fürs schnelle Code-Review!"
 						autocomplete="off"
 						maxlength="140"
 					/>
