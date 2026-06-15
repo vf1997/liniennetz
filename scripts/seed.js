@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
+import { readFileSync } from 'node:fs';
 import {
 	users,
 	connections,
@@ -17,9 +18,30 @@ import { getWeekKey } from '../src/lib/netz.js';
  * Füllt die Datenbank mit glaubwürdigen Beispiel-Daten,
  * damit "Liniennetz" sofort lebendig wirkt.
  * Ausführen mit:  npm run db:seed
+ *
+ * Sind in der .env die Turso-Zugangsdaten gesetzt, wird die Cloud-Datenbank
+ * befüllt – sonst die lokale Datei local.db.
  */
 
-const client = createClient({ url: 'file:local.db' });
+// .env einlesen (ohne Zusatz-Bibliothek), damit die Turso-Werte gefunden werden.
+try {
+	for (const line of readFileSync('.env', 'utf8').split('\n')) {
+		const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+		if (!m || process.env[m[1]]) continue;
+		let v = m[2];
+		if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+			v = v.slice(1, -1);
+		}
+		if (v) process.env[m[1]] = v;
+	}
+} catch {
+	// keine .env -> lokale Datei
+}
+
+const client = createClient({
+	url: process.env.TURSO_DATABASE_URL || 'file:local.db',
+	authToken: process.env.TURSO_AUTH_TOKEN || undefined
+});
 const db = drizzle(client);
 
 function daysAgo(n) {
