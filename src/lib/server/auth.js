@@ -18,18 +18,20 @@ const SESSION_SECRET = env.SESSION_SECRET || 'dev-only-unsicheres-geheimnis-bitt
 export const COOKIE_NAME = 'liniennetz_session';
 
 /**
- * Liefert die wirksame Anmelde-Konfiguration. Zugangsdaten kommen zuerst aus den
- * Einstellungen, ersatzweise aus den .env-Variablen.
- *   mode      – gewählter Modus ('demo' | 'slack')
- *   hasCreds  – sind Client ID + Secret vorhanden?
+ * Liefert die wirksame Anmelde-Konfiguration.
+ *   mode      – gewählter Modus ('demo' | 'slack'). Vorrang: Umgebungs-Variable
+ *               LOGIN_MODE > Einstellung loginMode (DB) > Standard 'demo'.
+ *   hasCreds  – sind Client ID + Secret vorhanden? (Env zuerst, dann DB-Einstellung)
  *   active    – ist Slack-Login JETZT wirklich aktiv (Modus slack UND Zugangsdaten da)?
  */
 export async function getSlackConfig() {
 	const s = await getSettings();
-	const clientId = (s.slackClientId || env.SLACK_CLIENT_ID || '').trim();
-	const clientSecret = (s.slackClientSecret || env.SLACK_CLIENT_SECRET || '').trim();
-	const redirectUri = (s.slackRedirectUri || env.SLACK_REDIRECT_URI || '').trim();
-	const mode = s.loginMode === 'slack' ? 'slack' : 'demo';
+	const clientId = (env.SLACK_CLIENT_ID || s.slackClientId || '').trim();
+	const clientSecret = (env.SLACK_CLIENT_SECRET || s.slackClientSecret || '').trim();
+	const redirectUri = (env.SLACK_REDIRECT_URI || s.slackRedirectUri || '').trim();
+	const envMode = String(env.LOGIN_MODE || '').trim().toLowerCase();
+	const wanted = envMode === 'slack' || envMode === 'demo' ? envMode : s.loginMode;
+	const mode = wanted === 'slack' ? 'slack' : 'demo';
 	const hasCreds = Boolean(clientId && clientSecret);
 	return { mode, clientId, clientSecret, redirectUri, hasCreds, active: mode === 'slack' && hasCreds };
 }

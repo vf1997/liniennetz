@@ -10,7 +10,7 @@ import {
 	truths,
 	guesses
 } from '$lib/server/db/schema.js';
-import { DECORATIONS, decorationByKey, rankFor } from '$lib/netz.js';
+import { AVATAR_ICONS, DECORATIONS, decorationByKey, rankFor } from '$lib/netz.js';
 import { getSettings } from '$lib/server/settings.js';
 
 // Effektive Deko-Kosten aus den Einstellungen
@@ -215,11 +215,42 @@ async function loadProfil(params, locals) {
 		isSelf,
 		sharedInterests,
 		decorations,
-		truthGame
+		truthGame,
+		// Nur auf der eigenen Haltestelle (zum Bearbeiten): Avatar-Symbole + Abteilungen (aus den Einstellungen)
+		avatarIcons: isSelf ? AVATAR_ICONS : [],
+		departments: isSelf ? settings.abteilungen : []
 	};
 }
 
 export const actions = {
+	// Eigenen Anzeigenamen und Avatar speichern
+	profil: async ({ request, locals, params }) => {
+		const me = locals.user;
+		const id = Number(params.id);
+		if (!me || me.id !== id)
+			return fail(403, { profilError: 'Du kannst nur deine eigene Haltestelle bearbeiten.' });
+
+		const data = await request.formData();
+		const name = String(data.get('name') || '')
+			.trim()
+			.slice(0, 40);
+		let avatar = String(data.get('avatar') || '').trim();
+		if (avatar && !AVATAR_ICONS.includes(avatar)) avatar = '';
+		const role = String(data.get('role') || '')
+			.trim()
+			.slice(0, 60);
+		const department = String(data.get('department') || '')
+			.trim()
+			.slice(0, 40);
+		if (!name) return fail(400, { profilError: 'Bitte einen Namen eingeben.' });
+
+		await db
+			.update(users)
+			.set({ name, avatar: avatar || null, role: role || null, department: department || null })
+			.where(eq(users.id, id));
+		return { profilSaved: true };
+	},
+
 	// Ein eigenes Interesse hinzufügen
 	interesseHinzufuegen: async ({ request, locals, params }) => {
 		const me = locals.user;

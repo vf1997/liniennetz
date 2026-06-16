@@ -48,11 +48,36 @@ export function monogramColor(name) {
 	return MONOGRAM_COLORS[hashString(String(name || '')) % MONOGRAM_COLORS.length];
 }
 
+// Auswählbare Avatar-Symbole (statt Initialen).
+export const AVATAR_ICONS = [
+	'😀', '😎', '🤓', '🤖', '🦊', '🐱', '🐶', '🐼',
+	'🐧', '🦉', '🐢', '🐝', '🦄', '🐙', '🦖', '🐬',
+	'🌟', '🚀', '⚡', '🌈', '🎩', '👑', '🎸', '🎮',
+	'☕', '🌵', '🍀', '🔥', '🍕', '🏀', '🎨', '📚'
+];
+
+// Was im Avatar-Kreis steht: gewähltes Emoji, sonst die Initialen.
+export function avatarText(user) {
+	return user?.avatar || monogram(user?.name);
+}
+
 // Wahrzeichen, die eine abgeschlossene Wochen-Mission freischaltet
 export const LANDMARKS = {
-	hauptbahnhof: { icon: '🏛️', label: 'Hauptbahnhof' },
-	bruecke: { icon: '🌉', label: 'Brücke' },
-	park: { icon: '🌳', label: 'Stadtpark' }
+	hauptbahnhof: {
+		icon: '🏛️',
+		label: 'Hauptbahnhof',
+		desc: 'Das Herz eures Netzes – gemeinsam durch eine Wochen-Mission freigeschaltet.'
+	},
+	bruecke: {
+		icon: '🌉',
+		label: 'Brücke',
+		desc: 'Verbindet, was vorher getrennt war – Belohnung für eine erfüllte Wochen-Mission.'
+	},
+	park: {
+		icon: '🌳',
+		label: 'Stadtpark',
+		desc: 'Ein Ort zum Durchatmen – euer Netz hat dafür eine Wochen-Mission gemeistert.'
+	}
 };
 
 // Persönliche Ränge nach gesammelten Fahrgäste-Punkten (Gamification).
@@ -121,6 +146,26 @@ export function buildCity(idx, W, H) {
 	const sy = (v) => M + v * (H - 2 * M);
 	const out = { fields: [], water: [], river: null, parks: [], roads: [], plazas: [], buildings: [] };
 
+	// Hindernisse für die Häuser-Platzierung: Punkte entlang Straßen/Fluss/Teich,
+	// damit kein Haus auf einer Straße oder im Wasser landet (Straße geht nicht durch Häuser).
+	const obstacles = [];
+	let riverPts = []; // Stützpunkte des Flusses – Straßen sollen nicht parallel darin laufen
+	const cubicPts = (p0, p1, p2, p3, steps = 16) => {
+		const pts = [];
+		for (let s = 0; s <= steps; s++) {
+			const t = s / steps;
+			const mt = 1 - t;
+			pts.push([
+				mt * mt * mt * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * p3[0],
+				mt * mt * mt * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * p3[1]
+			]);
+		}
+		return pts;
+	};
+	const addObstacles = (pts, pad) => {
+		for (const p of pts) obstacles.push({ x: p[0], y: p[1], pad });
+	};
+
 	const grove = (i, w, h, nt) => {
 		const x = sx(cityRnd(i, 23)) - w / 2;
 		const y = sy(cityRnd(i, 24)) - h / 2;
@@ -133,30 +178,98 @@ export function buildCity(idx, W, H) {
 			});
 		return { x, y, w, h, trees };
 	};
+	// Häuser deterministisch platzieren. Aussparen: Straßen/Fluss/Teich (obstacles)
+	// UND andere Häuser (keine Überlappung) – per Rejection Sampling.
+	const GAP = 4; // Mindestabstand zwischen zwei Häusern
 	const houses = (n, maxS) => {
-		for (let i = 0; i < n; i++) {
-			const w = 8 + cityRnd(i, 41) * maxS;
-			const h = 8 + cityRnd(i, 42) * maxS;
-			out.buildings.push({
-				id: i,
-				x: sx(cityRnd(i, 43)) - w / 2,
-				y: sy(cityRnd(i, 44)) - h / 2,
-				w,
-				h,
-				lit: cityRnd(i, 45) > 0.72
+		let placed = 0;
+		let k = 0;
+		while (placed < n && k < n * 40) {
+			const w = 8 + cityRnd(k, 41) * maxS;
+			const h = 8 + cityRnd(k, 42) * maxS;
+			const cx = sx(cityRnd(k, 43));
+			const cy = sy(cityRnd(k, 44));
+			const lit = cityRnd(k, 45) > 0.72;
+			k++;
+			const half = Math.max(w, h) / 2;
+			const x = cx - w / 2;
+			const y = cy - h / 2;
+			// 1) zu nah an Straße/Fluss/Teich?
+			const nearObstacle = obstacles.some((o) => {
+				const dx = cx - o.x;
+				const dy = cy - o.y;
+				const min = o.pad + half;
+				return dx * dx + dy * dy < min * min;
 			});
+			if (nearObstacle) continue;
+			// 2) überlappt ein bereits gesetztes Haus (mit kleinem Abstand)?
+			const overlaps = out.buildings.some(
+				(b) => x < b.x + b.w + GAP && b.x < x + w + GAP && y < b.y + b.h + GAP && b.y < y + h + GAP
+			);
+			if (overlaps) continue;
+			out.buildings.push({ id: placed, x, y, w, h, lit });
+			placed++;
 		}
 	};
+	// Geschwungene Straßen (sanfte Kurven) in DREI Richtungen – waagerecht, senkrecht
+	// UND diagonal – wirkt wie ein lebendiges Stadtnetz. Straßen, die zu lange parallel
+	// im Fluss lägen, werden verworfen (eine querende/diagonale Straße hat nur wenige
+	// flussnahe Punkte; eine parallel laufende viele).
 	const grid = (n) => {
-		for (let i = 0; i < n; i++) {
-			if (cityRnd(i, 31) > 0.5) {
-				const y = sy(cityRnd(i, 32));
-				out.roads.push({ x1: 0, y1: y, x2: W, y2: y + (cityRnd(i, 33) - 0.5) * 30 });
+		let placed = 0;
+		let k = 0;
+		while (placed < n && k < n * 12) {
+			const a = (cityRnd(k, 36) - 0.5) * 55; // sanfte Kurven-Auslenkung
+			const b = (cityRnd(k, 37) - 0.5) * 55;
+			const dir = placed % 3; // 0 waagerecht, 1 senkrecht, 2 diagonal → garantierter Mix
+			let p0, p1, p2, p3;
+			if (dir === 0) {
+				const y = sy(0.12 + cityRnd(k, 32) * 0.76);
+				const y2 = y + (cityRnd(k, 33) - 0.5) * 45;
+				p0 = [0, y]; p1 = [W * 0.3, y + a]; p2 = [W * 0.66, y2 + b]; p3 = [W, y2];
+			} else if (dir === 1) {
+				const x = sx(0.12 + cityRnd(k, 34) * 0.76);
+				const x2 = x + (cityRnd(k, 35) - 0.5) * 45;
+				p0 = [x, 0]; p1 = [x + a, H * 0.3]; p2 = [x2 + b, H * 0.66]; p3 = [x2, H];
 			} else {
-				const x = sx(cityRnd(i, 34));
-				out.roads.push({ x1: x, y1: 0, x2: x + (cityRnd(i, 35) - 0.5) * 30, y2: H });
+				// Diagonale quer über die Karte (Richtung zufällig, damit sie den Fluss kreuzt)
+				const yA = sy(0.08 + cityRnd(k, 38) * 0.28);
+				const yB = sy(0.64 + cityRnd(k, 39) * 0.28);
+				const [ys, ye] = cityRnd(k, 40) > 0.5 ? [yA, yB] : [yB, yA];
+				p0 = [0, ys];
+				p1 = [W * 0.33, ys + (ye - ys) * 0.33 + a];
+				p2 = [W * 0.66, ys + (ye - ys) * 0.66 + b];
+				p3 = [W, ye];
 			}
+			k++;
+			// dicht abtasten, damit Häuser zuverlässig Abstand halten (keine Lücken zwischen Punkten)
+			const pts = cubicPts(p0, p1, p2, p3, 50);
+			if (riverPts.length) {
+				// Längster zusammenhängender Lauf nah am Fluss: eine querende Straße
+				// streift den Fluss nur kurz, eine parallel laufende über eine lange Strecke.
+				let run = 0;
+				let maxRun = 0;
+				for (const rp of pts) {
+					const near = riverPts.some(
+						(q) => (rp[0] - q[0]) ** 2 + (rp[1] - q[1]) ** 2 < 30 * 30
+					);
+					if (near) {
+						run++;
+						if (run > maxRun) maxRun = run;
+					} else {
+						run = 0;
+					}
+				}
+				if (maxRun > 6) continue; // läuft zu lange am Fluss entlang → parallel → verwerfen
+			}
+			out.roads.push(`M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}`);
+			addObstacles(pts, 16);
+			placed++;
 		}
+	};
+	const pond = (cx, cy, rx, ry) => {
+		out.water.push({ cx, cy, rx, ry });
+		obstacles.push({ x: cx, y: cy, pad: Math.max(rx, ry) + 6 });
 	};
 
 	if (idx === 0) {
@@ -165,13 +278,13 @@ export function buildCity(idx, W, H) {
 			const h = 90 + cityRnd(i, 2) * 60;
 			out.fields.push({ x: sx(cityRnd(i, 3)) - w / 2, y: sy(cityRnd(i, 4)) - h / 2, w, h });
 		}
-		out.water.push({ cx: sx(0.28), cy: sy(0.72), rx: 42, ry: 30 });
+		pond(sx(0.28), sy(0.72), 42, 30);
 		for (let i = 0; i < 4; i++)
 			out.parks.push(grove(i, 50 + cityRnd(i, 21) * 28, 42 + cityRnd(i, 22) * 22, 4 + Math.floor(cityRnd(i, 25) * 4)));
 		houses(7, 14);
 	} else if (idx === 1) {
 		out.fields.push({ x: sx(0.82) - 60, y: sy(0.18) - 45, w: 120, h: 90 });
-		out.water.push({ cx: sx(0.72), cy: sy(0.76), rx: 52, ry: 36 });
+		pond(sx(0.72), sy(0.76), 52, 36);
 		out.parks.push(grove(0, 110, 78, 7));
 		out.parks.push(grove(1, 58, 48, 4));
 		grid(3);
@@ -179,8 +292,13 @@ export function buildCity(idx, W, H) {
 	} else {
 		const y0 = sy(0.26);
 		const y1 = sy(0.7);
-		out.river = `M 0 ${y0} C ${W * 0.32} ${y0 - 70}, ${W * 0.6} ${y1 + 60}, ${W} ${y1}`;
-		grid(idx === 2 ? 5 : 8);
+		const rp0 = [0, y0], rp1 = [W * 0.32, y0 - 70], rp2 = [W * 0.6, y1 + 60], rp3 = [W, y1];
+		out.river = `M ${rp0[0]} ${rp0[1]} C ${rp1[0]} ${rp1[1]}, ${rp2[0]} ${rp2[1]}, ${rp3[0]} ${rp3[1]}`;
+		// Fluss-Stützpunkte: Straßen meiden Parallelverlauf, Häuser bleiben am Ufer.
+		riverPts = cubicPts(rp0, rp1, rp2, rp3, 36);
+		addObstacles(riverPts, 30);
+		// Straßen in beide Richtungen; die Parallel-Prüfung sorgt fürs Queren des Flusses.
+		grid(idx === 2 ? 6 : 9);
 		out.parks.push(grove(0, 100, 70, 6));
 		if (idx === 3) {
 			out.parks.push(grove(1, 78, 58, 5));
@@ -252,6 +370,81 @@ export function stationPositions(users, width, height) {
 		map[u.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
 	});
 	return map;
+}
+
+// Sanfte Farben für die Stadtviertel – je Abteilung ein eigener Ton.
+export const DISTRICT_COLORS = [
+	'#b5462f',
+	'#3f6b73',
+	'#c89b3c',
+	'#7c8b5e',
+	'#8a5a8b',
+	'#a8674a',
+	'#5f7a6a',
+	'#9a6b9c'
+];
+
+/**
+ * Ordnet die Haltestellen nach Abteilung in „Stadtviertel": jede Abteilung
+ * bekommt eine eigene Zelle (Rasterfeld) auf der Karte; ihre Mitglieder
+ * gruppieren sich darin (kleines Sonnenblumen-Muster). Liefert die Positionen
+ * je User-ID UND die Viertel (Zentrum, Maße, Farbe, Name) zum Einzeichnen.
+ */
+export function cityDistricts(users, W, H) {
+	const margin = 70;
+	const sorted = [...users].sort((a, b) => a.id - b.id);
+
+	// Nach Abteilung gruppieren (stabile Reihenfolge nach erstem Auftreten der ID).
+	const order = [];
+	const groups = new Map();
+	for (const u of sorted) {
+		const key = (u.department && String(u.department).trim()) || 'Ohne Team';
+		if (!groups.has(key)) {
+			groups.set(key, []);
+			order.push(key);
+		}
+		groups.get(key).push(u);
+	}
+
+	const D = order.length;
+	const cols = Math.ceil(Math.sqrt(D));
+	const rows = Math.ceil(D / cols);
+	const cellW = (W - 2 * margin) / cols;
+	const cellH = (H - 2 * margin) / rows;
+	const golden = Math.PI * (3 - Math.sqrt(5));
+	const positions = {};
+	const districts = [];
+
+	order.forEach((name, di) => {
+		const members = groups.get(name);
+		const row = Math.floor(di / cols);
+		const col = di % cols;
+		// Letzte (evtl. unvollständige) Reihe waagerecht zentrieren.
+		const inRow = Math.min(cols, D - row * cols);
+		const rowOffset = ((cols - inRow) * cellW) / 2;
+		const dcx = margin + rowOffset + cellW * (col + 0.5);
+		const dcy = margin + cellH * (row + 0.5);
+
+		const m = members.length;
+		const clusterR = m <= 1 ? 0 : Math.min(cellW, cellH) * 0.28;
+		members.forEach((u, i) => {
+			const r = m === 1 ? 0 : clusterR * Math.sqrt((i + 0.5) / m);
+			const ang = i * golden + di * 1.3;
+			positions[u.id] = { x: dcx + r * Math.cos(ang), y: dcy + r * Math.sin(ang) };
+		});
+
+		districts.push({
+			name,
+			cx: dcx,
+			cy: dcy,
+			rx: cellW * 0.42,
+			ry: cellH * 0.42,
+			color: DISTRICT_COLORS[di % DISTRICT_COLORS.length],
+			count: m
+		});
+	});
+
+	return { positions, districts };
 }
 
 // ISO-Kalenderwoche als Schlüssel, z. B. "2026-W24"

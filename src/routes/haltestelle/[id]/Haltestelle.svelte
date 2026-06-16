@@ -1,10 +1,35 @@
 <script>
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { monogram, monogramColor, colorForValue, decorationByKey } from '$lib/netz.js';
 
 	let { data, form } = $props();
 	const p = $derived(data.person);
 	const deco = $derived(decorationByKey(p.decoration));
+
+	// Profil bearbeiten (nur eigene Haltestelle): Eingaben mit der Person abgleichen,
+	// aber NUR beim Wechsel der Person (sonst würden die eigenen Eingaben sofort
+	// wieder überschrieben). Darum hängt der Effekt nur an data.person.id und liest
+	// alles Weitere via untrack (kein Re-Run beim Tippen/Auswählen).
+	let editName = $state(data.person.name);
+	let editAvatar = $state(data.person.avatar ?? '');
+	let editRole = $state(data.person.role ?? '');
+	let editDept = $state(data.person.department ?? '');
+	// 'list' = aus Vorgaben wählen, 'custom' = eigene Abteilung tippen
+	let deptMode = $state('list');
+	$effect(() => {
+		data.person.id; // einzige Abhängigkeit: bei Personenwechsel neu übernehmen
+		untrack(() => {
+			editName = data.person.name;
+			editAvatar = data.person.avatar ?? '';
+			editRole = data.person.role ?? '';
+			editDept = data.person.department ?? '';
+			deptMode =
+				data.person.department && !data.departments.includes(data.person.department)
+					? 'custom'
+					: 'list';
+		});
+	});
 </script>
 
 <svelte:head>
@@ -15,7 +40,7 @@
 	<a class="back" href="/">← Zurück zur Stadt</a>
 
 	<header class="profile">
-		<span class="avatar" style="background:{monogramColor(p.name)}">{monogram(p.name)}</span>
+		<span class="avatar" class:emoji={!!p.avatar} style="background:{monogramColor(p.name)}">{p.avatar || monogram(p.name)}</span>
 		<div class="ident">
 			<h1>{p.name}{#if deco}<span class="profile-deco" title={deco.label}>{deco.icon}</span>{/if}</h1>
 			<p class="role">
@@ -88,6 +113,94 @@
 	{/if}
 
 	{#if data.isSelf}
+		<section class="card profil-edit">
+			<h2>Dein Auftritt ✏️</h2>
+			<p class="card-hint">So erscheinst du auf der Karte und überall im Netz – Name und ein Symbol.</p>
+			{#if form?.profilError}<p class="error">{form.profilError}</p>{/if}
+			{#if form?.profilSaved}<p class="success-msg">✓ Gespeichert!</p>{/if}
+			<form method="POST" action="?/profil" use:enhance>
+				<div class="profil-preview">
+					<span class="pv-avatar" class:emoji={!!editAvatar} style="background:{monogramColor(editName)}">
+						{editAvatar || monogram(editName)}
+					</span>
+					<span class="pv-name">{editName || 'Dein Name'}</span>
+				</div>
+
+				<label class="profil-field">
+					<span class="field-label">Anzeigename</span>
+					<input name="name" bind:value={editName} maxlength="40" autocomplete="off" required />
+				</label>
+
+				<label class="profil-field">
+					<span class="field-label">Rolle / Jobbezeichnung</span>
+					<input
+						name="role"
+						bind:value={editRole}
+						placeholder="z. B. Product Ownerin VIA"
+						maxlength="60"
+						autocomplete="off"
+					/>
+				</label>
+
+				<div class="profil-field">
+					<span class="field-label">Abteilung</span>
+					{#if deptMode === 'custom'}
+						<input
+							name="department"
+							bind:value={editDept}
+							placeholder="Eigene Abteilung …"
+							maxlength="40"
+							autocomplete="off"
+						/>
+						<button type="button" class="dept-switch" onclick={() => { deptMode = 'list'; editDept = ''; }}>
+							← aus Liste wählen
+						</button>
+					{:else}
+						<select name="department" bind:value={editDept}>
+							<option value="">— keine —</option>
+							{#each data.departments as d (d)}
+								<option value={d}>{d}</option>
+							{/each}
+							{#if editDept && !data.departments.includes(editDept)}
+								<option value={editDept}>{editDept}</option>
+							{/if}
+						</select>
+						<button type="button" class="dept-switch" onclick={() => { deptMode = 'custom'; editDept = ''; }}>
+							➕ andere Abteilung eingeben
+						</button>
+					{/if}
+				</div>
+
+				<div class="profil-field">
+					<span class="field-label">Avatar-Symbol</span>
+					<input type="hidden" name="avatar" value={editAvatar} />
+					<div class="icons">
+						<button
+							type="button"
+							class="icon initials"
+							class:active={editAvatar === ''}
+							onclick={() => (editAvatar = '')}
+						>
+							<span class="ic-init">{monogram(editName)}</span>
+							<span class="ic-lab">Initialen</span>
+						</button>
+						{#each data.avatarIcons as ic (ic)}
+							<button
+								type="button"
+								class="icon"
+								class:active={editAvatar === ic}
+								onclick={() => (editAvatar = ic)}
+							>
+								{ic}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<button type="submit" class="primary save-profil">Speichern</button>
+			</form>
+		</section>
+
 		<section class="card werkstatt">
 			<h2>Haltestellen-Werkstatt 🎨</h2>
 			<p class="card-hint">
@@ -385,6 +498,10 @@
 		box-shadow: 0 12px 30px -16px rgba(60, 40, 20, 0.6);
 	}
 
+	.avatar.emoji {
+		font-size: 3rem;
+	}
+
 	h1 {
 		font-family: 'Fraunces', serif;
 		font-weight: 900;
@@ -546,6 +663,149 @@
 		border-radius: 9px;
 		font-size: 0.88rem;
 		margin: 0 0 14px;
+	}
+
+	/* Profil bearbeiten (Name + Avatar) */
+	.profil-preview {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 20px;
+	}
+
+	.pv-avatar {
+		width: 64px;
+		height: 64px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-size: 1.7rem;
+		font-weight: 600;
+		flex-shrink: 0;
+		box-shadow: 0 10px 24px -12px rgba(60, 40, 20, 0.6);
+	}
+
+	.pv-avatar.emoji {
+		font-size: 2.4rem;
+	}
+
+	.pv-name {
+		font-family: 'Fraunces', serif;
+		font-weight: 600;
+		font-size: 1.3rem;
+	}
+
+	.profil-field {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-bottom: 18px;
+	}
+
+	.field-label {
+		font-weight: 600;
+		font-size: 0.95rem;
+	}
+
+	.profil-field input {
+		padding: 11px 13px;
+		border: 1px solid #d8d0c0;
+		border-radius: 9px;
+		font-size: 1rem;
+		font-family: inherit;
+		background: #fff;
+		color: #1a1a1a;
+	}
+
+	.profil-field input:focus {
+		outline: none;
+		border-color: #b5462f;
+		box-shadow: 0 0 0 3px rgba(181, 70, 47, 0.12);
+	}
+
+	.dept-switch {
+		align-self: flex-start;
+		margin-top: 6px;
+		background: none;
+		border: none;
+		color: #b5462f;
+		font-size: 0.82rem;
+		font-family: inherit;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.dept-switch:hover {
+		text-decoration: underline;
+	}
+
+	.profil-field select {
+		padding: 11px 13px;
+		border: 1px solid #d8d0c0;
+		border-radius: 9px;
+		font-size: 1rem;
+		font-family: inherit;
+		background: #fff;
+		color: #1a1a1a;
+		cursor: pointer;
+	}
+
+	.profil-field select:focus {
+		outline: none;
+		border-color: #b5462f;
+		box-shadow: 0 0 0 3px rgba(181, 70, 47, 0.12);
+	}
+
+	.icons {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+		gap: 8px;
+	}
+
+	.icon {
+		aspect-ratio: 1;
+		border: 1px solid #e8e1d4;
+		background: #fff;
+		border-radius: 12px;
+		font-size: 1.5rem;
+		cursor: pointer;
+		font-family: inherit;
+		display: grid;
+		place-items: center;
+		transition: border-color 0.12s, transform 0.12s;
+	}
+
+	.icon:hover {
+		border-color: #d8b8ad;
+		transform: translateY(-2px);
+	}
+
+	.icon.active {
+		border-color: #b5462f;
+		background: #f7e0d9;
+		box-shadow: 0 0 0 2px rgba(181, 70, 47, 0.18);
+	}
+
+	.icon.initials {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.ic-init {
+		font-size: 0.95rem;
+		font-weight: 700;
+		color: #1a1a1a;
+	}
+
+	.ic-lab {
+		font-size: 0.6rem;
+		color: #79736a;
+	}
+
+	.save-profil {
+		margin-top: 4px;
 	}
 
 	.deco-grid {
@@ -1026,5 +1286,35 @@
 		border-color: #b5462f;
 		background: #fdf0ee;
 		transform: translateX(3px);
+	}
+
+	@media (max-width: 600px) {
+		.page {
+			padding: 20px 14px 72px;
+		}
+		.profile {
+			gap: 14px;
+		}
+		.avatar {
+			width: 64px;
+			height: 64px;
+			font-size: 1.5rem;
+		}
+		.avatar.emoji {
+			font-size: 2.2rem;
+		}
+		h1 {
+			font-size: 1.7rem;
+		}
+		.card {
+			padding: 18px 16px;
+		}
+		.badges {
+			grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+		}
+		.interest-add {
+			flex-direction: column;
+			align-items: stretch;
+		}
 	}
 </style>

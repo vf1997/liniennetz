@@ -33,8 +33,8 @@
 			{#each podium as { slot, person } (person.id)}
 				<a href="/haltestelle/{person.id}" class="pod pod-{slot}" class:me={person.id === data.meId}>
 					<span class="pod-medal">{medal[slot]}</span>
-					<span class="pod-avatar" style="background:{monogramColor(person.name)}">
-						{monogram(person.name)}
+					<span class="pod-avatar" class:emoji={!!person.avatar} style="background:{monogramColor(person.name)}">
+						{person.avatar || monogram(person.name)}
 						{#if person.decoration && decorationByKey(person.decoration)}
 							<span class="pod-deco">{decorationByKey(person.decoration).icon}</span>
 						{/if}
@@ -54,7 +54,7 @@
 			{#each data.ranking as p, i (p.id)}
 				<li class="row" class:me={p.id === data.meId}>
 					<span class="pos">{i + 1}</span>
-					<span class="row-avatar" style="background:{monogramColor(p.name)}">{monogram(p.name)}</span>
+					<span class="row-avatar" class:emoji={!!p.avatar} style="background:{monogramColor(p.name)}">{p.avatar || monogram(p.name)}</span>
 					<span class="row-ident">
 						<a href="/haltestelle/{p.id}" class="row-name">{p.name}</a>
 						<span class="row-rank">{p.rank.icon} {p.rank.title}{p.role ? ` · ${p.role}` : ''}</span>
@@ -173,6 +173,10 @@
 		font-size: 1.05rem;
 		position: relative;
 		box-shadow: 0 8px 20px -10px rgba(60, 40, 20, 0.6);
+	}
+
+	.pod-avatar.emoji {
+		font-size: 1.9rem;
 	}
 
 	.pod-deco {
@@ -299,6 +303,10 @@
 		flex-shrink: 0;
 	}
 
+	.row-avatar.emoji {
+		font-size: 1.45rem;
+	}
+
 	.row-ident {
 		display: flex;
 		flex-direction: column;
@@ -393,6 +401,28 @@
 		font-size: 0.78rem;
 		font-weight: 600;
 		color: #fff;
+	}
+
+	@media (max-width: 600px) {
+		.page {
+			padding: 24px 14px 72px;
+		}
+		.podium {
+			gap: 6px;
+		}
+		.pod {
+			padding: 12px 4px 0;
+		}
+		.pod-avatar {
+			width: 44px;
+			height: 44px;
+		}
+		.pod-name {
+			font-size: 0.92rem;
+		}
+		.card {
+			padding: 18px 16px;
+		}
 	}
 
 	@media (max-width: 560px) {

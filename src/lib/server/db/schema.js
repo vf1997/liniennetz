@@ -19,6 +19,8 @@ export const users = sqliteTable('users', {
 	name: text('name').notNull(),
 	email: text('email'),
 	avatarUrl: text('avatar_url'),
+	// Selbst gewähltes Emoji als Avatar (statt Initialen). Leer = Initialen.
+	avatar: text('avatar'),
 	role: text('role'),
 	department: text('department'),
 	decoration: text('decoration'),

@@ -3,14 +3,13 @@
 	const s = $derived(data.settings);
 
 	let step = $state(0);
-	let drawn = $state(false);
 
 	function buildSteps(s) {
 		return [
 			{
 				icon: '🚏',
 				title: 'Du bist eine Haltestelle',
-				body: `Melde dich an – im Demo-Modus per Klick, oder mit deinem echten Slack-Konto. Welcher Modus gilt, legst du in den Einstellungen unter „Anmeldung“ fest. Meldest du dich mit Slack an, teilst du dir automatisch ein Netz mit allen aus demselben Slack-Workspace. Ab dann bist du eine Haltestelle auf der gemeinsamen Stadtkarte – jede Kollegin, jeder Kollege ist eine eigene Haltestelle.`
+				body: `Melde dich an – im Demo-Modus per Klick, oder mit deinem echten Slack-Konto. Welcher Modus gilt, legt die Administration fest. Meldest du dich mit Slack an, teilst du dir automatisch ein Netz mit allen aus demselben Slack-Workspace. Ab dann bist du eine Haltestelle auf der gemeinsamen Stadtkarte – jede Kollegin, jeder Kollege ist eine eigene Haltestelle.`
 			},
 			{
 				icon: '🎟️',
@@ -70,23 +69,118 @@
 		if (step > 0) step--;
 	}
 
-	const glossar = $derived([
-		{ icon: '🚏', term: 'Haltestelle', def: 'Deine Person auf der Karte.' },
-		{ icon: '〰️', term: 'Linie', def: 'Eine Verbindung zwischen zwei Haltestellen.' },
-		{ icon: '🎟️', term: 'Fahrschein', def: `Knappe Währung: ${s.ticketsPerWeek} pro Woche zum Verschenken.` },
-		{ icon: '👥', term: 'Fahrgäste', def: 'Deine persönlichen Punkte für jede Aktion.' },
-		{ icon: '📈', term: 'Netz-Stufe', def: 'Gemeinsames Level des ganzen Teams.' },
-		{ icon: '🔥', term: 'Netz-Flamme', def: 'Tage in Folge, an denen etwas gebaut wurde.' },
-		{ icon: '🏗️', term: 'Wochen-Mission', def: 'Gemeinsames Ziel mit Belohnung.' },
-		{ icon: '🌉', term: 'Wahrzeichen', def: 'Dauerhafte Belohnung einer erfüllten Mission.' },
-		{ icon: '🎖️', term: 'Abzeichen', def: 'Auszeichnungen wie „Brückenbauer" oder „Stammgast".' },
-		{ icon: '🏆', term: 'Kür der Woche', def: 'Lebendigste Haltestelle der letzten 7 Tage.' },
-		{ icon: '👏', term: 'Applaus', def: 'Würdigt eine schöne Geste mit einem Klick.' },
-		{ icon: '🕵️', term: 'Zwei Wahrheiten, eine Lüge', def: 'Mini-Spiel auf jedem Profil: Finde die erfundene Aussage.' },
-		{ icon: '🏅', term: 'Rang', def: 'Dein persönlicher Titel nach gesammelten Fahrgäste-Punkten.' },
-		{ icon: '🏆', term: 'Rangliste', def: 'Wertung aller Haltestellen + Abteilungs-Duell.' },
-		{ icon: '🔑', term: 'Anmelde-Modus', def: 'Demo (Person per Klick) oder Slack-Login – umschaltbar in den Einstellungen.' },
-		{ icon: '🎬', term: 'Simulation', def: 'Vorführung in den Einstellungen: zeigt live, wie das Netz wächst (ohne echte Daten).' }
+	// Alle Features – verständlich erklärt, gruppiert nach „was du damit tust".
+	const features = $derived([
+		{
+			group: '🙋 So machst du mit',
+			items: [
+				{
+					icon: '🎟️',
+					title: 'Fahrschein verschenken',
+					text: `Tipp jemanden auf der Karte an – eine kleine Karte öffnet sich. Schreib einen kurzen Dank, wähl einen Firmenwert, fertig: sofort zeichnet sich eine Linie zwischen euch. Du hast ${s.ticketsPerWeek} Fahrscheine pro Woche.`
+				},
+				{
+					icon: '❓',
+					title: 'Frage des Tages',
+					text: `Jeden Tag eine lockere Frage auf der Stadt-Seite. Beantworte sie (${s.pointsAnswer} Punkte) und die Karte verrät dir, wie viele Kolleg:innen es genauso sehen.`
+				},
+				{
+					icon: '👏',
+					title: 'Applaus spenden',
+					text: `Im Bereich „Zuletzt im Netz" würdigst du eine schöne Geste mit einem Klick – kostet nichts, freut alle.`
+				},
+				{
+					icon: '🕵️',
+					title: 'Zwei Wahrheiten, eine Lüge',
+					text: `Auf deinem Profil schreibst du drei Aussagen über dich, eine davon erfunden. Wer die Lüge errät, bekommt ${s.pointsLieCorrect} Punkte – und du auch.`
+				}
+			]
+		},
+		{
+			group: '🗺️ Die Karte erkunden',
+			items: [
+				{
+					icon: '👆',
+					title: 'Haltestelle anklicken',
+					text: `Klick auf eine Person: ihr Netz wird hervorgehoben, der kürzeste Weg zu dir erscheint („über 2 Stationen verbunden"), und du kannst direkt von dort einen Fahrschein schenken.`
+				},
+				{
+					icon: '🔎',
+					title: 'Suchen & Filtern',
+					text: `Finde jemanden über das Suchfeld (mit „📍 Mich" springst du zu dir selbst). Über die Farb-Chips blendest du nur einen Firmenwert oder eine Abteilung ein.`
+				},
+				{
+					icon: '🔍',
+					title: 'Zoom & Verschieben',
+					text: `Mausrad zoomt, Ziehen verschiebt die Karte. Der Knopf „⟲ Zurücksetzen" (oben rechts) bringt Ansicht, Auswahl und Filter zurück auf Anfang.`
+				},
+				{
+					icon: '⏱️',
+					title: 'Zeitraffer',
+					text: `Der Regler unter der Karte spielt ab, wie euer Netz über die Tage gewachsen ist – schön, um den Verlauf zu zeigen.`
+				},
+				{
+					icon: '🔴',
+					title: 'Live',
+					text: `Die Karte aktualisiert sich von selbst. Verschenkt jemand im Team gerade einen Fahrschein, erscheint die neue Linie automatisch – ideal für einen Bildschirm im Büro.`
+				},
+				{
+					icon: '🎨',
+					title: 'Themes & Stimmung',
+					text: `Die Stadt verändert ihr Aussehen mit der Ausbaustufe (Dorf → Metropole). Im Menü „Ansicht" kannst du außerdem Tag/Nacht, Jahreszeit und Theme selbst einstellen.`
+				}
+			]
+		},
+		{
+			group: '📈 Gemeinsam wachsen',
+			items: [
+				{
+					icon: '🏙️',
+					title: 'Netz-Ausbaustufe',
+					text: `Alle Linien zusammen heben das ganze Team: Dorf → Kleinstadt (ab ${s.levelKleinstadt}) → Großstadt (ab ${s.levelGrossstadt}) → Metropole (ab ${s.levelMetropole}). Ihr wachst miteinander, nicht gegeneinander.`
+				},
+				{
+					icon: '🏗️',
+					title: 'Wochen-Mission & Wahrzeichen',
+					text: `Eine gemeinsame Mission gibt ein Ziel vor. Erreicht ihr es, erscheint dauerhaft ein Wahrzeichen (Hauptbahnhof, Brücke oder Park) auf der Karte – ein bleibendes Andenken.`
+				},
+				{
+					icon: '🏆',
+					title: 'Kür der Woche',
+					text: `Wer in den letzten 7 Tagen am aktivsten verbunden hat, wird „Lebendigste Haltestelle der Woche" – mit Krone auf der Karte.`
+				}
+			]
+		},
+		{
+			group: '🏅 Dein Fortschritt',
+			items: [
+				{
+					icon: '🏅',
+					title: 'Fahrgäste & Rang',
+					text: `Jede Aktion bringt dir „Fahrgäste" (deine Punkte) und damit einen persönlichen Rang – vom Fahrgast bis zur Netz-Legende. Deinen Fortschritt siehst du oben auf der Stadt-Seite.`
+				},
+				{
+					icon: '🎖️',
+					title: 'Abzeichen',
+					text: `Sammle Auszeichnungen wie „Brückenbauer", „Stammgast" oder „Lügen-Detektiv". Auf deinem Profil siehst du sie samt Fortschritt zur nächsten.`
+				},
+				{
+					icon: '🏆',
+					title: 'Rangliste',
+					text: `Eine eigene Seite mit Podest, Gesamtwertung und einem spielerischen Abteilungs-Duell: welches Team treibt das Netz am meisten an?`
+				},
+				{
+					icon: '📊',
+					title: 'Dein Netz auf einen Blick',
+					text: `Das Panel auf deinem Profil zeigt deine Zahlen, deine engste Verbindung und dein nächstes Ziel.`
+				},
+				{
+					icon: '🛠️',
+					title: 'Werkstatt & Interessen',
+					text: `Schalte mit gesammelten Punkten Deko für deine Haltestelle frei – und wähle deine Interessen, damit ihr leichter Gemeinsamkeiten entdeckt.`
+				}
+			]
+		}
 	]);
 </script>
 
@@ -132,42 +226,40 @@
 			</div>
 		</div>
 
-		<!-- Kleine Spielerei: eine Linie bauen -->
-		<div class="demo">
-			<span class="demo-title">Probier's aus:</span>
-			<svg viewBox="0 0 300 130" class="demo-svg" role="img" aria-label="Demo: eine Linie bauen">
-				<path class="demo-line" class:drawn d="M 55 70 Q 150 25 245 70" pathLength="1" />
-				<g>
-					<circle cx="55" cy="70" r="20" fill="#3f6b73" />
-					<text x="55" y="74" text-anchor="middle" class="demo-init">DU</text>
-				</g>
-				<g>
-					<circle cx="245" cy="70" r="20" fill="#c89b3c" />
-					<text x="245" y="74" text-anchor="middle" class="demo-init">AB</text>
-				</g>
-				{#if drawn}
-					<text x="150" y="115" text-anchor="middle" class="demo-ok">✓ Verbunden!</text>
-				{/if}
-			</svg>
-			<button class="demo-btn" onclick={() => (drawn = !drawn)}>
-				{drawn ? 'Nochmal' : 'Linie bauen 🎟️'}
-			</button>
-		</div>
 	</section>
 
-	<!-- Glossar -->
-	<section class="glossar-wrap">
-		<h2 class="section-title">Die Bausteine auf einen Blick</h2>
-		<div class="glossar">
-			{#each glossar as g (g.term)}
-				<div class="gloss">
-					<span class="gloss-icon">{g.icon}</span>
-					<div>
-						<div class="gloss-term">{g.term}</div>
-						<div class="gloss-def">{g.def}</div>
-					</div>
+	<!-- Alle Features erklärt -->
+	<section class="features-wrap">
+		<h2 class="section-title">Alle Features – verständlich erklärt</h2>
+		{#each features as fg (fg.group)}
+			<div class="feat-group">
+				<h3 class="feat-group-title">{fg.group}</h3>
+				<div class="feat-grid">
+					{#each fg.items as f (f.title)}
+						<div class="feat">
+							<span class="feat-icon">{f.icon}</span>
+							<div class="feat-body">
+								<div class="feat-title">{f.title}</div>
+								<p class="feat-text">{f.text}</p>
+							</div>
+						</div>
+					{/each}
 				</div>
-			{/each}
+			</div>
+		{/each}
+	</section>
+
+	<!-- Live-Simulation -->
+	<section class="sim-card">
+		<div class="sim-icon">🎬</div>
+		<div class="sim-body">
+			<h2>Live-Simulation</h2>
+			<p>
+				Du willst sehen, wie das Liniennetz lebt, ohne zu warten? Die Simulation zeigt, wie 8
+				Haltestellen nach und nach Fahrscheine verschenken und die Stadt vom Dorf bis zur Metropole
+				wächst – rein zur Ansicht, deine echten Daten bleiben unberührt.
+			</p>
+			<a class="sim-btn" href="/simulation">▶ Simulation starten</a>
 		</div>
 	</section>
 
@@ -185,8 +277,9 @@
 			</li>
 		</ol>
 		<p class="tip">
-			Tipp: Alle Spielregeln (Fahrscheine, Punkte, Stufen …) kannst du unter
-			<a href="/config">Einstellungen</a> anpassen.
+			Tipp: Deinen Namen und dein Avatar-Symbol stellst du auf deiner
+			<a href="/haltestelle/{data.user.id}">eigenen Haltestelle</a> ein. Die Spielregeln
+			(Fahrscheine, Punkte, Stufen …) legt die Administration über Umgebungs-Variablen fest.
 		</p>
 	</section>
 </div>
@@ -234,11 +327,7 @@
 
 	/* Geführte Tour */
 	.tour {
-		display: grid;
-		grid-template-columns: 1.4fr 1fr;
-		gap: 22px;
 		margin-bottom: 40px;
-		align-items: stretch;
 	}
 
 	.tour-card {
@@ -345,124 +434,113 @@
 		color: #b5462f;
 	}
 
-	/* Demo */
-	.demo {
-		background: radial-gradient(circle at 50% 40%, #fffdf8, #f4f1ea);
-		border: 1px solid #e3ddd0;
-		border-radius: 18px;
-		padding: 22px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 12px;
-		box-shadow: 0 22px 48px -32px rgba(60, 40, 20, 0.55);
-	}
-
-	.demo-title {
-		font-size: 0.82rem;
-		color: #79736a;
-		align-self: flex-start;
-	}
-
-	.demo-svg {
-		width: 100%;
-		max-width: 280px;
-	}
-
-	.demo-line {
-		fill: none;
-		stroke: #b5462f;
-		stroke-width: 4;
-		stroke-linecap: round;
-		stroke-dasharray: 1;
-		stroke-dashoffset: 1;
-	}
-
-	.demo-line.drawn {
-		animation: draw 0.9s ease forwards;
-		filter: drop-shadow(0 0 5px rgba(181, 70, 47, 0.5));
-	}
-
-	@keyframes draw {
-		to {
-			stroke-dashoffset: 0;
-		}
-	}
-
-	.demo-init {
-		fill: #fff;
-		font-size: 13px;
-		font-weight: 600;
-		font-family: 'IBM Plex Sans', sans-serif;
-	}
-
-	.demo-ok {
-		fill: #b5462f;
-		font-family: 'Fraunces', serif;
-		font-weight: 900;
-		font-size: 15px;
-	}
-
-	.demo-btn {
-		background: #1a1a1a;
-		color: #f4f1ea;
-		border: none;
-		padding: 10px 18px;
-		border-radius: 9px;
-		font-weight: 600;
-		cursor: pointer;
-		font-family: inherit;
-		font-size: 0.92rem;
-	}
-
-	.demo-btn:hover {
-		background: #b5462f;
-	}
-
-	/* Glossar */
 	.section-title {
 		font-family: 'Fraunces', serif;
 		font-weight: 600;
 		font-size: 1.5rem;
-		margin: 0 0 18px;
+		margin: 0 0 22px;
 		text-align: center;
 	}
 
-	.glossar-wrap {
+	/* Alle Features erklärt */
+	.features-wrap {
 		margin-bottom: 40px;
 	}
 
-	.glossar {
+	.feat-group {
+		margin-bottom: 26px;
+	}
+
+	.feat-group-title {
+		font-family: 'Fraunces', serif;
+		font-weight: 600;
+		font-size: 1.15rem;
+		margin: 0 0 12px;
+		color: #1a1a1a;
+	}
+
+	.feat-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 		gap: 12px;
 	}
 
-	.gloss {
+	.feat {
 		display: flex;
-		gap: 12px;
+		gap: 14px;
 		align-items: flex-start;
 		background: #fffdf8;
 		border: 1px solid #e3ddd0;
-		border-radius: 12px;
-		padding: 14px;
+		border-radius: 14px;
+		padding: 16px 18px;
+		box-shadow: 0 14px 34px -30px rgba(60, 40, 20, 0.5);
 	}
 
-	.gloss-icon {
-		font-size: 1.4rem;
+	.feat-icon {
+		font-size: 1.6rem;
+		flex-shrink: 0;
+		line-height: 1.2;
+	}
+
+	.feat-title {
+		font-weight: 600;
+		font-size: 1rem;
+		margin-bottom: 4px;
+	}
+
+	.feat-text {
+		font-size: 0.9rem;
+		color: #4a443c;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	/* Live-Simulation */
+	.sim-card {
+		display: flex;
+		gap: 18px;
+		align-items: center;
+		background: linear-gradient(135deg, #1a1a1a, #2b2b2b);
+		color: #f4f1ea;
+		border-radius: 18px;
+		padding: 24px 26px;
+		margin-bottom: 40px;
+	}
+
+	.sim-icon {
+		font-size: 2.4rem;
 		flex-shrink: 0;
 	}
 
-	.gloss-term {
+	.sim-body h2 {
+		font-family: 'Fraunces', serif;
+		font-weight: 600;
+		font-size: 1.3rem;
+		margin: 0 0 8px;
+		color: #fff;
+	}
+
+	.sim-body p {
+		margin: 0 0 14px;
+		line-height: 1.55;
+		color: #e7ddcd;
+		font-size: 0.95rem;
+		max-width: 58ch;
+	}
+
+	.sim-btn {
+		display: inline-block;
+		background: #b5462f;
+		color: #fff;
+		text-decoration: none;
+		padding: 11px 22px;
+		border-radius: 10px;
 		font-weight: 600;
 		font-size: 0.95rem;
 	}
 
-	.gloss-def {
-		font-size: 0.85rem;
-		color: #79736a;
-		line-height: 1.4;
+	.sim-btn:hover {
+		background: #c2543c;
 	}
 
 	/* Schnellstart */
@@ -497,8 +575,15 @@
 	}
 
 	@media (max-width: 680px) {
-		.tour {
-			grid-template-columns: 1fr;
+		.sim-card {
+			flex-direction: column;
+			text-align: center;
+		}
+	}
+
+	@media (max-width: 600px) {
+		.page {
+			padding: 24px 14px 72px;
 		}
 	}
 </style>

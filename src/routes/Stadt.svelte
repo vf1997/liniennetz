@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 	import {
-		stationPositions,
+		cityDistricts,
 		colorForValue,
 		monogram,
 		monogramColor,
@@ -26,7 +26,9 @@
 		park: { x: 92, y: 74 }
 	};
 
-	const positions = $derived(stationPositions(data.users, W, H));
+	const layout = $derived(cityDistricts(data.users, W, H));
+	const positions = $derived(layout.positions);
+	const districts = $derived(layout.districts);
 	const userById = $derived(Object.fromEntries(data.users.map((u) => [u.id, u])));
 	const allLines = $derived(data.connections);
 	const level = $derived(data.level);
@@ -158,7 +160,8 @@
 	});
 
 	// --- Hover (kurze Info, folgt der Maus) ---
-	let hover = $state(null); // { type:'station', id } | { type:'edge', e }
+	/** @type {null | { type: 'station', id: number } | { type: 'edge', e: any } | { type: 'landmark', key: string } | { type: 'district', i: number }} */
+	let hover = $state(null);
 	let pointer = $state({ x: 0, y: 0 });
 	let frameEl = $state(null);
 	function trackPointer(ev) {
@@ -268,6 +271,36 @@
 	let activeValue = $state(null);
 	let activeDept = $state(null);
 	const departments = $derived([...new Set(data.users.map((u) => u.department).filter(Boolean))]);
+	// Firmenwert-Chips: vorgegebene Werte + tatsächlich verschenkte „eigene" Werte (aus den Linien)
+	const valueChips = $derived.by(() => {
+		const set = new Set(data.values);
+		for (const c of data.connections) if (c.valueTag) set.add(c.valueTag);
+		return [...set];
+	});
+	const customValues = $derived(new Set(valueChips.filter((v) => !data.values.includes(v))));
+
+	// Filter-Legende: jede Gruppe (Firmenwerte / Abteilungen) ist sichtbar und klappt
+	// für sich auf eine Zeile ein – „Mehr" erscheint nur, wenn die Gruppe länger ist.
+	let valuesEl = $state(null);
+	let deptsEl = $state(null);
+	let valuesExpanded = $state(false);
+	let deptsExpanded = $state(false);
+	let valuesOverflow = $state(false);
+	let deptsOverflow = $state(false);
+	function measureLegend() {
+		if (valuesEl) valuesOverflow = valuesEl.scrollHeight > 40;
+		if (deptsEl) deptsOverflow = deptsEl.scrollHeight > 40;
+	}
+	$effect(() => {
+		valueChips.length;
+		departments.length;
+		measureLegend();
+	});
+	$effect(() => {
+		if (!browser) return;
+		window.addEventListener('resize', measureLegend);
+		return () => window.removeEventListener('resize', measureLegend);
+	});
 	const searchMatches = $derived(
 		query.trim()
 			? data.users
@@ -292,19 +325,17 @@
 	const _now = new Date();
 	const autoDaytime = _now.getHours() >= 7 && _now.getHours() < 19;
 
-	// Modus: 'auto' | 'day' | 'night'  /  'auto' | season.key  /  Theme 'auto' | '0'..'3'
+	// Modus: 'auto' | 'day' | 'night'  /  'auto' | season.key
 	let dnMode = $state(browser ? localStorage.getItem('liniennetz-dn') || 'auto' : 'auto');
 	let seasonMode = $state(browser ? localStorage.getItem('liniennetz-season') || 'auto' : 'auto');
-	let themeMode = $state(browser ? localStorage.getItem('liniennetz-theme') || 'auto' : 'auto');
 	let viewMenu = $state(false);
 	$effect(() => {
 		if (!browser) return;
 		localStorage.setItem('liniennetz-dn', dnMode);
 		localStorage.setItem('liniennetz-season', seasonMode);
-		localStorage.setItem('liniennetz-theme', themeMode);
 	});
-	// Welches Theme gilt? Auto = aktuelle Ausbaustufe, sonst manuell gewählt.
-	const themeIdx = $derived(themeMode === 'auto' ? level.index : Number(themeMode));
+	// Das Theme folgt IMMER der aktuellen Ausbaustufe (nicht manuell wählbar).
+	const themeIdx = $derived(level.index);
 
 	const daytime = $derived(dnMode === 'auto' ? autoDaytime : dnMode === 'day');
 	const seasonIdx = $derived(
@@ -455,9 +486,21 @@
 		if (playTimer) clearInterval(playTimer);
 	});
 
+	// Eigener Firmenwert (statt aus der Liste) – je Gift-Formular ein Schalter.
+	let selCustomValue = $state(false);
+	let giveCustomValue = $state(false);
+	// Beim Wechsel/Schließen der Haltestelle das kompakte Formular wieder auf die
+	// Liste stellen (Default = erster Firmenwert), nicht im Eigener-Wert-Modus bleiben.
+	$effect(() => {
+		selected;
+		selCustomValue = false;
+	});
+
 	const enhanceTicket = () => async ({ result, update }) => {
 		await update();
 		if (result.type === 'success' && result.data?.success) {
+			selCustomValue = false;
+			giveCustomValue = false;
 			const d = result.data;
 			if (d.levelUp) fireCelebration(`🎉 ${d.levelUp.name} erreicht!`, true);
 			else if (d.questCompleted) fireCelebration(questMsg(d.questCompleted), true);
@@ -621,23 +664,48 @@
 				{/if}
 			</div>
 			<div class="legend">
-				{#each data.values as v (v)}
-					<button
-						class="lg-chip"
-						class:active={activeValue === v}
-						style="--c:{colorForValue(v)}"
-						onclick={() => (activeValue = activeValue === v ? null : v)}
-					>
-						<span class="lg-dot"></span>{v}
-					</button>
-				{/each}
-				{#each departments as d (d)}
-					<button
-						class="lg-chip dept"
-						class:active={activeDept === d}
-						onclick={() => (activeDept = activeDept === d ? null : d)}>🏢 {d}</button
-					>
-				{/each}
+				<div class="legend-group">
+					<span class="lg-label">Firmenwerte</span>
+					<div class="lg-row" class:collapsed={!valuesExpanded} bind:this={valuesEl}>
+						{#each valueChips as v (v)}
+							<button
+								class="lg-chip"
+								class:active={activeValue === v}
+								class:custom={customValues.has(v)}
+								style="--c:{colorForValue(v)}"
+								onclick={() => (activeValue = activeValue === v ? null : v)}
+							>
+								<span class="lg-dot"></span>{customValues.has(v) ? '✏️ ' : ''}{v}
+							</button>
+						{/each}
+					</div>
+					{#if valuesOverflow}
+						<button class="lg-more" onclick={() => (valuesExpanded = !valuesExpanded)}>
+							{valuesExpanded ? 'Weniger ▴' : 'Mehr ▾'}
+						</button>
+					{/if}
+				</div>
+
+				{#if departments.length}
+					<div class="legend-group">
+						<span class="lg-label">Abteilungen</span>
+						<div class="lg-row" class:collapsed={!deptsExpanded} bind:this={deptsEl}>
+							{#each departments as d (d)}
+								<button
+									class="lg-chip dept"
+									class:active={activeDept === d}
+									onclick={() => (activeDept = activeDept === d ? null : d)}>🏢 {d}</button
+								>
+							{/each}
+						</div>
+						{#if deptsOverflow}
+							<button class="lg-more" onclick={() => (deptsExpanded = !deptsExpanded)}>
+								{deptsExpanded ? 'Weniger ▴' : 'Mehr ▾'}
+							</button>
+						{/if}
+					</div>
+				{/if}
+
 				{#if activeValue || activeDept}
 					<button class="lg-clear" onclick={() => ((activeValue = null), (activeDept = null))}>
 						Filter aus ✕
@@ -655,21 +723,6 @@
 				>
 				{#if viewMenu}
 					<div class="view-menu">
-						<div class="vm-row">
-							<span class="vm-label">Theme</span>
-							<div class="vm-opts">
-								<button class:active={themeMode === 'auto'} onclick={() => (themeMode = 'auto')}
-									>Auto</button
-								>
-								{#each CITY_THEMES as t, ti (ti)}
-									<button
-										class:active={themeMode === String(ti)}
-										title={t.name}
-										onclick={() => (themeMode = String(ti))}>{['🏡', '🏘️', '🏙️', '🌆'][ti]}</button
-									>
-								{/each}
-							</div>
-						</div>
 						<div class="vm-row">
 							<span class="vm-label">Tag / Nacht</span>
 							<div class="vm-opts">
@@ -757,8 +810,8 @@
 				{#each city.water as w, i (i)}
 					<ellipse class="water" cx={w.cx} cy={w.cy} rx={w.rx} ry={w.ry} />
 				{/each}
-				{#each city.roads as r, i (i)}
-					<line class="road" x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} />
+				{#each city.roads as rd, i (i)}
+					<path class="road" d={rd} />
 				{/each}
 				{#each city.plazas as p, i (i)}
 					<circle class="plaza" cx={p.cx} cy={p.cy} r={p.r} />
@@ -781,6 +834,33 @@
 					/>
 				{/each}
 			</g>
+
+			<!-- Stadtviertel: je Abteilung eine sanft getönte Zone mit Namensschild -->
+			{#if districts.length > 1}
+				<g class="districts">
+					{#each districts as d, i (d.name)}
+						<ellipse
+							class="district-zone"
+							cx={d.cx}
+							cy={d.cy}
+							rx={d.rx}
+							ry={d.ry}
+							style="--dc:{d.color}"
+							role="presentation"
+							onpointerdown={panDown}
+							onmouseenter={() => (hover = { type: 'district', i })}
+							onmouseleave={() => (hover = null)}
+						/>
+						<text
+							class="district-label"
+							x={d.cx}
+							y={d.cy - d.ry + 16}
+							text-anchor="middle"
+							style="--dc:{d.color}">{d.name}</text
+						>
+					{/each}
+				</g>
+			{/if}
 
 			<!-- Strecken (gebündelt; Dicke = Bindungsstärke) -->
 			{#each edges as e (e.key)}
@@ -822,7 +902,7 @@
 					{@const r = radiusFor(u.id)}
 					<g
 						class="station"
-						class:me={u.id === data.meId}
+						class:me={u.id === data.meId && !activeValue && !activeDept}
 						class:sel={u.id === selected}
 						class:dim={stationDimmed(u.id)}
 						transform="translate({positions[u.id].x} {positions[u.id].y})"
@@ -846,7 +926,7 @@
 							<circle class="sel-ring" r={r + 5} />
 						{/if}
 						<circle r={r} fill={monogramColor(u.name)} class="dot" />
-						<text class="initials" text-anchor="middle" dy="0.34em">{monogram(u.name)}</text>
+						<text class="initials" class:emoji={!!u.avatar} text-anchor="middle" dy="0.34em">{u.avatar || monogram(u.name)}</text>
 						{#if u.decoration && decorationByKey(u.decoration)}
 							<text class="deco" x={r + 1} y={-(r - 9)}>{decorationByKey(u.decoration).icon}</text>
 						{/if}
@@ -858,7 +938,14 @@
 			<!-- Freigeschaltete Wahrzeichen – als platzierte Monumente -->
 			{#each data.landmarks as key (key)}
 				{#if LANDMARK_POS[key]}
-					<g class="landmark" transform="translate({LANDMARK_POS[key].x} {LANDMARK_POS[key].y})">
+					<g
+						class="landmark"
+						transform="translate({LANDMARK_POS[key].x} {LANDMARK_POS[key].y})"
+						role="img"
+						aria-label={LANDMARKS[key]?.label}
+						onmouseenter={() => (hover = { type: 'landmark', key })}
+						onmouseleave={() => (hover = null)}
+					>
 						<ellipse class="lm-shadow" cx="0" cy="23" rx="28" ry="7" />
 						<circle class="lm-disc" r="25" />
 						<circle class="lm-ring" r="25" />
@@ -896,6 +983,15 @@
 							: ''}</span
 					>
 					<span class="tt-row">{ru.icon} {ru.title} · {degreeByUser[hover.id] ?? 0} Linien</span>
+				{:else if hover.type === 'landmark'}
+					{@const lm = LANDMARKS[hover.key]}
+					<strong>{lm?.icon} {lm?.label}</strong>
+					<span class="tt-sub">Gemeinsam freigeschaltetes Wahrzeichen</span>
+					{#if lm?.desc}<span class="tt-row">{lm.desc}</span>{/if}
+				{:else if hover.type === 'district'}
+					{@const d = districts[hover.i]}
+					<strong>🏙️ {d?.name}</strong>
+					<span class="tt-sub">Stadtviertel · {d?.count} {d?.count === 1 ? 'Haltestelle' : 'Haltestellen'}</span>
 				{:else}
 					{@const e = hover.e}
 					<strong>{userById[e.a]?.name?.split(' ')[0]} ↔ {userById[e.b]?.name?.split(' ')[0]}</strong>
@@ -914,8 +1010,11 @@
 			<div class="sel-card">
 				<button class="sel-close" onclick={() => (selected = null)} aria-label="Schließen">×</button>
 				<div class="sel-head">
-					<span class="sel-avatar" style="background:{monogramColor(selectedInfo.u.name)}"
-						>{monogram(selectedInfo.u.name)}</span
+					<span
+						class="sel-avatar"
+						class:emoji={!!selectedInfo.u.avatar}
+						style="background:{monogramColor(selectedInfo.u.name)}"
+						>{selectedInfo.u.avatar || monogram(selectedInfo.u.name)}</span
 					>
 					<div class="sel-ident">
 						<strong>{selectedInfo.u.name}</strong>
@@ -938,9 +1037,15 @@
 					{#if form?.error}<p class="sel-err">{form.error}</p>{/if}
 					<form method="POST" action="?/fahrschein" use:enhance={enhanceTicket} class="sel-gift">
 						<input type="hidden" name="toUserId" value={selected} />
-						<select name="valueTag" required>
-							{#each data.values as v}<option value={v}>{v}</option>{/each}
-						</select>
+						{#if selCustomValue}
+							<input name="valueTag" required placeholder="Eigener Wert …" maxlength="40" autocomplete="off" />
+							<button type="button" class="val-back" onclick={() => (selCustomValue = false)}>↩ Liste</button>
+						{:else}
+							<select name="valueTag" required>
+								{#each data.values as v}<option value={v}>{v}</option>{/each}
+							</select>
+							<button type="button" class="val-back" onclick={() => (selCustomValue = true)}>✏️ Eigener Wert</button>
+						{/if}
 						<input name="message" placeholder="Kurzer Dank …" autocomplete="off" maxlength="140" />
 						<button type="submit" class="sel-send" disabled={data.ticketsRemaining <= 0}>
 							🎟️ Schenken
@@ -1013,11 +1118,17 @@
 
 				<label>
 					<span>Wofür? (Firmenwert)</span>
-					<select name="valueTag" required>
-						{#each data.values as v}
-							<option value={v}>{v}</option>
-						{/each}
-					</select>
+					{#if giveCustomValue}
+						<input name="valueTag" required placeholder="Eigener Wert …" maxlength="40" autocomplete="off" />
+						<button type="button" class="val-back" onclick={() => (giveCustomValue = false)}>↩ aus Liste wählen</button>
+					{:else}
+						<select name="valueTag" required>
+							{#each data.values as v}
+								<option value={v}>{v}</option>
+							{/each}
+						</select>
+						<button type="button" class="val-back" onclick={() => (giveCustomValue = true)}>✏️ Eigener Wert eingeben</button>
+					{/if}
 				</label>
 
 				<label>
@@ -1526,9 +1637,64 @@
 
 	.legend {
 		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.legend-group {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.lg-label {
+		font-size: 0.66rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #9a948a;
+		font-weight: 600;
+		flex-shrink: 0;
+		min-width: 88px;
+		padding-top: 7px;
+	}
+
+	.lg-row {
+		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
 		align-items: center;
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* eingeklappt: nur eine Zeile der Gruppe sichtbar */
+	.lg-row.collapsed {
+		max-height: 30px;
+		overflow: hidden;
+	}
+
+	.lg-more {
+		border: 1px solid #d8d0c0;
+		background: #f7efe9;
+		color: #b5462f;
+		font-family: inherit;
+		font-size: 0.74rem;
+		font-weight: 600;
+		padding: 4px 10px;
+		border-radius: 999px;
+		cursor: pointer;
+		white-space: nowrap;
+		flex-shrink: 0;
+		margin-top: 1px;
+	}
+
+	.lg-more:hover {
+		border-color: #d8b8ad;
+	}
+
+	/* eigene Firmenwerte (nicht aus der Vorgabe) – gestrichelter Rand zur Unterscheidung */
+	.lg-chip.custom {
+		border-style: dashed;
 	}
 
 	.lg-chip {
@@ -1889,6 +2055,7 @@
 		fill-opacity: 0.7;
 	}
 	.city .road {
+		fill: none;
 		stroke: var(--road, #efe8d8);
 		stroke-width: 7;
 		stroke-linecap: round;
@@ -2017,6 +2184,11 @@
 		pointer-events: none;
 	}
 
+	/* Emoji-Avatar füllt den Kreis besser als 2 Initialen */
+	.station .initials.emoji {
+		font-size: 20px;
+	}
+
 	.station .label {
 		fill: #4a443c;
 		font-size: 12px;
@@ -2126,6 +2298,10 @@
 		flex-shrink: 0;
 	}
 
+	.sel-avatar.emoji {
+		font-size: 1.5rem;
+	}
+
 	.sel-ident {
 		display: flex;
 		flex-direction: column;
@@ -2188,6 +2364,22 @@
 		font-family: inherit;
 	}
 
+	/* „zurück zur Liste"-Link bei eigenem Firmenwert */
+	.val-back {
+		align-self: flex-start;
+		background: none;
+		border: none;
+		color: #b5462f;
+		font-size: 0.78rem;
+		font-family: inherit;
+		cursor: pointer;
+		padding: 2px 0 0;
+	}
+
+	.val-back:hover {
+		text-decoration: underline;
+	}
+
 	.sel-send:hover {
 		background: #9c3a26;
 	}
@@ -2217,7 +2409,54 @@
 	}
 
 	/* Wahrzeichen auf der Karte – platzierte Monumente */
+	/* Stadtviertel (Abteilungs-Zonen) */
+	.districts {
+		pointer-events: none;
+	}
+
+	.district-zone {
+		fill: var(--dc);
+		fill-opacity: 0.07;
+		stroke: var(--dc);
+		stroke-opacity: 0.35;
+		stroke-width: 1.5;
+		stroke-dasharray: 5 7;
+		pointer-events: auto;
+		cursor: help;
+	}
+
+	.district-label {
+		pointer-events: none;
+	}
+
+	.district-label {
+		fill: var(--dc);
+		font-family: 'IBM Plex Mono', monospace;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		opacity: 0.85;
+	}
+
+	.map.night .district-zone {
+		fill-opacity: 0.12;
+		stroke-opacity: 0.5;
+	}
+
+	.map.night .district-label {
+		opacity: 0.95;
+	}
+
 	.landmark {
+		pointer-events: auto;
+		cursor: help;
+	}
+
+	/* Plakette unter dem Monument fängt keine Maus-Hover ab (nur die Scheibe/Icon) */
+	.landmark .lm-plate,
+	.landmark .lm-label,
+	.lm-shadow {
 		pointer-events: none;
 	}
 
@@ -2458,7 +2697,8 @@
 	.feed li {
 		display: flex;
 		align-items: center;
-		gap: 11px;
+		flex-wrap: wrap;
+		gap: 8px 11px;
 		padding: 11px 2px;
 		border-bottom: 1px solid #efe9dd;
 		font-size: 0.92rem;
@@ -2477,6 +2717,19 @@
 
 	.feed-text {
 		flex: 1;
+		min-width: 0;
+	}
+
+	.feed .tag {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.clap-form {
+		flex-shrink: 0;
+		margin-left: auto;
 	}
 
 	.feed .msg {
@@ -2581,6 +2834,51 @@
 		}
 		.grid {
 			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 600px) {
+		.page {
+			padding: 16px 12px 80px;
+		}
+		.map-card {
+			padding: 14px 12px 8px;
+			border-radius: 14px;
+		}
+		.map-head {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 2px;
+		}
+		.map-hint {
+			font-size: 0.72rem;
+		}
+		.rank-chip {
+			flex-wrap: wrap;
+			padding: 12px 14px;
+			gap: 8px 12px;
+		}
+		.stat {
+			padding: 14px;
+		}
+		/* Legende: Label auf eigene Zeile, Chips darunter über volle Breite */
+		.legend-group {
+			flex-wrap: wrap;
+		}
+		.lg-label {
+			flex-basis: 100%;
+			min-width: 0;
+			padding-top: 0;
+		}
+		.lg-row {
+			flex-basis: 100%;
+		}
+		.search {
+			flex: 1;
+		}
+		.search-in {
+			flex: 1;
+			min-width: 0;
 		}
 	}
 </style>

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { env } from '$env/dynamic/private';
 import { db } from './db/index.js';
 import { settings } from './db/schema.js';
 
@@ -143,6 +144,14 @@ export const SETTING_DEFS = [
 		default: 'Füreinander da, Software mit Herz, Gemeinsam wegweisend, Tüftlergeist, Fahrgast im Blick',
 		help: 'Diese Werte kann man an einen Fahrschein hängen. Der erste Wert in der Liste gilt als besonderer Teamwert und vergibt das Abzeichen „Rückenstärker".'
 	},
+	{
+		key: 'abteilungen',
+		group: 'Inhalte',
+		label: 'Abteilungen (mit Komma getrennt)',
+		type: 'list',
+		default: 'Produkt, Entwicklung, Beratung, Support, Design, Verwaltung',
+		help: 'Diese Abteilungen kann man im Profil auswählen; sie bestimmen die Stadtviertel auf der Karte. Per Env-Var: LN_ABTEILUNGEN.'
+	},
 	// Anmeldung: 'demo' = Person per Klick wählen, 'slack' = echtes Slack-Login.
 	// Diese Felder bekommen eine eigene Bedien-Oberfläche im Abschnitt "Anmeldung".
 	{ key: 'loginMode', group: 'Anmeldung', label: 'Anmelde-Modus', type: 'text', default: 'demo', hidden: true },
@@ -170,13 +179,24 @@ function coerce(def, raw) {
 	return String(raw);
 }
 
-/** Liefert alle Einstellungen als fertig getyptes Objekt (Zahlen als Zahlen, Listen als Arrays). */
+/** Umgebungs-Variablen-Name für eine Einstellung, z. B. ticketsPerWeek -> LN_TICKETSPERWEEK */
+export function envNameFor(key) {
+	return 'LN_' + key.toUpperCase();
+}
+
+/**
+ * Liefert alle Einstellungen als fertig getyptes Objekt.
+ * Vorrang: Umgebungs-Variable (LN_<KEY>) > Datenbank > Standardwert.
+ * So lassen sich im Produktivbetrieb alle Werte rein über .env festlegen.
+ */
 export async function getSettings() {
 	const rows = await db.select().from(settings);
 	const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 	const out = {};
 	for (const def of SETTING_DEFS) {
-		out[def.key] = coerce(def, stored[def.key] ?? def.default);
+		const envVal = env[envNameFor(def.key)];
+		const raw = envVal != null && envVal !== '' ? envVal : (stored[def.key] ?? def.default);
+		out[def.key] = coerce(def, raw);
 	}
 	return out;
 }

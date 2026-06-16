@@ -32,8 +32,8 @@
 			{#if data.slackMisconfigured}
 				<p class="notice">
 					ℹ️ Der Slack-Modus ist gewählt, aber es fehlen noch Client ID und Secret. Solange
-					läuft die Anmeldung im Demo-Modus. Die Zugangsdaten trägst du unter
-					<a href="/config">Einstellungen → Anmeldung</a> ein.
+					läuft die Anmeldung im Demo-Modus. Die Zugangsdaten kommen aus den
+					Umgebungs-Variablen (<code>SLACK_CLIENT_ID</code> / <code>SLACK_CLIENT_SECRET</code>).
 				</p>
 			{/if}
 			<p class="hint">
@@ -294,5 +294,15 @@
 	.slack-mark {
 		font-weight: 900;
 		font-size: 1.2rem;
+	}
+
+	@media (max-width: 600px) {
+		.login {
+			padding: 32px 14px 64px;
+			gap: 20px;
+		}
+		.card {
+			padding: 20px 16px;
+		}
 	}
 </style>

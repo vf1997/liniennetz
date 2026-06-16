@@ -46,6 +46,7 @@ async function loadRangliste(me) {
 		.map((u) => ({
 			id: u.id,
 			name: u.name,
+			avatar: u.avatar,
 			role: u.role,
 			department: u.department,
 			decoration: u.decoration,

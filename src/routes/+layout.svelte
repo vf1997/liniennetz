@@ -20,13 +20,14 @@
 			>
 			<a href="/rangliste" class:active={page.url.pathname === '/rangliste'}>Rangliste</a>
 			<a href="/hilfe" class:active={page.url.pathname === '/hilfe'}>Hilfe</a>
-			<a href="/config" class:active={page.url.pathname === '/config'}>Einstellungen</a>
 		</nav>
 
 		<div class="me">
 			<a class="who" href="/haltestelle/{data.user.id}" title="Meine Haltestelle">
-				<span class="avatar" style="background:{monogramColor(data.user.name)}"
-					>{monogram(data.user.name)}</span
+				<span
+					class="avatar"
+					class:emoji={!!data.user.avatar}
+					style="background:{monogramColor(data.user.name)}">{data.user.avatar || monogram(data.user.name)}</span
 				>
 				<span class="name">{data.user.name}</span>
 			</a>
@@ -42,11 +43,17 @@
 </main>
 
 <style>
+	:global(html) {
+		overflow-x: clip;
+	}
+
 	:global(body) {
 		margin: 0;
 		background: #f4f1ea;
 		color: #1a1a1a;
 		font-family: 'IBM Plex Sans', sans-serif;
+		overflow-x: clip;
+		max-width: 100%;
 	}
 
 	:global(*) {
@@ -142,6 +149,10 @@
 		flex-shrink: 0;
 	}
 
+	.avatar.emoji {
+		font-size: 1.15rem;
+	}
+
 	.who .name {
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -165,14 +176,33 @@
 
 	@media (max-width: 620px) {
 		.topbar {
-			gap: 14px;
-			padding: 12px 16px;
+			flex-wrap: wrap;
+			gap: 10px 14px;
+			padding: 10px 14px;
 		}
 		.who .name {
 			display: none;
 		}
+		/* Navigation auf eigene Zeile, bei Bedarf horizontal scrollbar */
+		nav {
+			order: 3;
+			flex-basis: 100%;
+			margin-right: 0;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+			padding-bottom: 2px;
+		}
+		nav::-webkit-scrollbar {
+			display: none;
+		}
 		nav a {
-			padding: 7px 9px;
+			padding: 7px 11px;
+			white-space: nowrap;
+		}
+		.brand {
+			font-size: 1.1rem;
+			margin-right: auto;
 		}
 	}
 </style>

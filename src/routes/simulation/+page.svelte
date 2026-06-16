@@ -162,7 +162,7 @@
 				deine echten Daten bleiben unberührt.)
 			</p>
 		</div>
-		<a class="back" href="/config">← zurück</a>
+		<a class="back" href="/hilfe">← zurück</a>
 	</header>
 
 	<!-- Steuerung + Status -->
@@ -209,8 +209,8 @@
 				{#each city.water as w, i (i)}
 					<ellipse class="water" cx={w.cx} cy={w.cy} rx={w.rx} ry={w.ry} />
 				{/each}
-				{#each city.roads as r, i (i)}
-					<line class="road" x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} />
+				{#each city.roads as rd, i (i)}
+					<path class="road" d={rd} />
 				{/each}
 				{#each city.plazas as p, i (i)}
 					<circle class="plaza" cx={p.cx} cy={p.cy} r={p.r} />
@@ -509,6 +509,7 @@
 		fill-opacity: 0.7;
 	}
 	.city .road {
+		fill: none;
 		stroke: var(--road, #efe8d8);
 		stroke-width: 7;
 		stroke-linecap: round;
@@ -654,5 +655,15 @@
 		color: #79736a;
 		font-size: 0.9rem;
 		margin: 0;
+	}
+
+	@media (max-width: 600px) {
+		.page {
+			padding: 18px 12px 72px;
+		}
+		.bar {
+			padding: 12px 14px;
+			gap: 12px;
+		}
 	}
 </style>
