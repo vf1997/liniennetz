@@ -1,5 +1,5 @@
-import { error, fail } from '@sveltejs/kit';
-import { and, eq, or } from 'drizzle-orm';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { and, eq, or, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	users,
@@ -7,11 +7,15 @@ import {
 	interests,
 	points,
 	ticketBudgets,
+	answers,
+	claps,
 	truths,
-	guesses
+	guesses,
+	sessions
 } from '$lib/server/db/schema.js';
 import { AVATAR_ICONS, DECORATIONS, decorationByKey, rankFor } from '$lib/netz.js';
 import { getSettings } from '$lib/server/settings.js';
+import { clearSessionCookie } from '$lib/server/auth.js';
 
 // Effektive Deko-Kosten aus den Einstellungen
 function decoCosts(settings) {
@@ -377,5 +381,38 @@ export const actions = {
 
 		await db.update(users).set({ decoration: key }).where(eq(users.id, id));
 		return { decorated: true };
+	},
+
+	// Eigenes Konto endgültig löschen (inkl. aller zugehörigen Daten) und abmelden.
+	kontoLoeschen: async ({ locals, params, cookies }) => {
+		const me = locals.user;
+		const id = Number(params.id);
+		if (!me || me.id !== id)
+			return fail(403, { profilError: 'Du kannst nur dein eigenes Konto löschen.' });
+
+		// Verbindungen, an denen die Person beteiligt ist (für deren Applaus-Einträge)
+		const myConns = await db
+			.select({ id: connections.id })
+			.from(connections)
+			.where(or(eq(connections.fromUserId, id), eq(connections.toUserId, id)));
+		const connIds = myConns.map((c) => c.id);
+
+		// Abhängige Daten zuerst löschen, dann die Person selbst.
+		if (connIds.length) await db.delete(claps).where(inArray(claps.connectionId, connIds));
+		await db.delete(claps).where(eq(claps.userId, id));
+		await db
+			.delete(connections)
+			.where(or(eq(connections.fromUserId, id), eq(connections.toUserId, id)));
+		await db.delete(points).where(eq(points.userId, id));
+		await db.delete(interests).where(eq(interests.userId, id));
+		await db.delete(ticketBudgets).where(eq(ticketBudgets.userId, id));
+		await db.delete(answers).where(eq(answers.userId, id));
+		await db.delete(truths).where(eq(truths.userId, id));
+		await db.delete(guesses).where(or(eq(guesses.userId, id), eq(guesses.targetUserId, id)));
+		await db.delete(sessions).where(eq(sessions.userId, id));
+		await db.delete(users).where(eq(users.id, id));
+
+		clearSessionCookie(cookies);
+		throw redirect(303, '/login');
 	}
 };

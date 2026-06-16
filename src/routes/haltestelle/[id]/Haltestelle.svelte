@@ -17,6 +17,8 @@
 	let editDept = $state(data.person.department ?? '');
 	// 'list' = aus Vorgaben wählen, 'custom' = eigene Abteilung tippen
 	let deptMode = $state('list');
+	// Konto-Löschen: zweistufige Bestätigung
+	let confirmDelete = $state(false);
 	$effect(() => {
 		data.person.id; // einzige Abhängigkeit: bei Personenwechsel neu übernehmen
 		untrack(() => {
@@ -457,6 +459,31 @@
 			<p class="card-hint">Diese Haltestelle ist noch nicht verbunden – bau die erste Linie!</p>
 		{/if}
 	</section>
+
+	{#if data.isSelf}
+		<section class="card danger">
+			<h2>Konto entfernen</h2>
+			<p class="card-hint">
+				Löscht deine Haltestelle dauerhaft – samt aller deiner Linien, Punkte, Interessen und
+				Beiträge. Das lässt sich <strong>nicht rückgängig</strong> machen.
+			</p>
+			{#if !confirmDelete}
+				<button type="button" class="danger-btn" onclick={() => (confirmDelete = true)}>
+					Konto entfernen …
+				</button>
+			{:else}
+				<p class="danger-confirm">Wirklich endgültig löschen?</p>
+				<div class="danger-actions">
+					<form method="POST" action="?/kontoLoeschen" use:enhance>
+						<button type="submit" class="danger-btn confirm">Ja, Konto löschen</button>
+					</form>
+					<button type="button" class="danger-cancel" onclick={() => (confirmDelete = false)}>
+						Abbrechen
+					</button>
+				</div>
+			{/if}
+		</section>
+	{/if}
 </div>
 
 <style>
@@ -1286,6 +1313,65 @@
 		border-color: #b5462f;
 		background: #fdf0ee;
 		transform: translateX(3px);
+	}
+
+	/* Konto entfernen */
+	.card.danger {
+		border-color: #e4c3bb;
+		background: #fdf6f4;
+	}
+
+	.card.danger h2 {
+		color: #9c3a26;
+	}
+
+	.danger-btn {
+		background: #fff;
+		color: #b5462f;
+		border: 1px solid #d8b8ad;
+		padding: 10px 18px;
+		border-radius: 9px;
+		font-weight: 600;
+		font-size: 0.92rem;
+		cursor: pointer;
+		font-family: inherit;
+	}
+
+	.danger-btn:hover {
+		background: #f7e0da;
+	}
+
+	.danger-btn.confirm {
+		background: #b5462f;
+		color: #fff;
+		border-color: #b5462f;
+	}
+
+	.danger-btn.confirm:hover {
+		background: #9c3a26;
+	}
+
+	.danger-confirm {
+		font-weight: 600;
+		color: #9c3a26;
+		margin: 0 0 12px;
+	}
+
+	.danger-actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+
+	.danger-cancel {
+		background: none;
+		border: none;
+		color: #79736a;
+		font-family: inherit;
+		font-size: 0.9rem;
+		cursor: pointer;
+		text-decoration: underline;
 	}
 
 	@media (max-width: 600px) {
