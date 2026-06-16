@@ -143,17 +143,6 @@ export const SETTING_DEFS = [
 		default: 'Füreinander da, Software mit Herz, Gemeinsam wegweisend, Tüftlergeist, Fahrgast im Blick',
 		help: 'Diese Werte kann man an einen Fahrschein hängen. Der erste Wert in der Liste gilt als besonderer Teamwert und vergibt das Abzeichen „Rückenstärker".'
 	},
-	{
-		// versteckt: wird nicht im normalen Formular gezeigt, sondern über die Demo-Zeitmaschine gesteuert
-		key: 'demoOffsetDays',
-		group: 'Demo',
-		label: 'Zeit-Versatz (Tage)',
-		type: 'int',
-		default: 0,
-		min: -3650,
-		max: 3650,
-		hidden: true
-	},
 	// Anmeldung: 'demo' = Person per Klick wählen, 'slack' = echtes Slack-Login.
 	// Diese Felder bekommen eine eigene Bedien-Oberfläche im Abschnitt "Anmeldung".
 	{ key: 'loginMode', group: 'Anmeldung', label: 'Anmelde-Modus', type: 'text', default: 'demo', hidden: true },
@@ -218,12 +207,6 @@ export async function saveSettings(values) {
 /** Setzt alle Einstellungen auf die Standardwerte zurück. */
 export async function resetSettings() {
 	await db.delete(settings);
-}
-
-/** Die (für die Demo ggf. verschobene) aktuelle Zeit. */
-export function demoNow(settings) {
-	const off = settings?.demoOffsetDays || 0;
-	return new Date(Date.now() + off * 86400000);
 }
 
 export { DEFS_BY_KEY };

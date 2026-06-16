@@ -85,7 +85,8 @@
 		{ icon: '🕵️', term: 'Zwei Wahrheiten, eine Lüge', def: 'Mini-Spiel auf jedem Profil: Finde die erfundene Aussage.' },
 		{ icon: '🏅', term: 'Rang', def: 'Dein persönlicher Titel nach gesammelten Fahrgäste-Punkten.' },
 		{ icon: '🏆', term: 'Rangliste', def: 'Wertung aller Haltestellen + Abteilungs-Duell.' },
-		{ icon: '🔑', term: 'Anmelde-Modus', def: 'Demo (Person per Klick) oder Slack-Login – umschaltbar in den Einstellungen.' }
+		{ icon: '🔑', term: 'Anmelde-Modus', def: 'Demo (Person per Klick) oder Slack-Login – umschaltbar in den Einstellungen.' },
+		{ icon: '🎬', term: 'Simulation', def: 'Vorführung in den Einstellungen: zeigt live, wie das Netz wächst (ohne echte Daten).' }
 	]);
 </script>
 

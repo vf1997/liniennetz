@@ -2,28 +2,34 @@ import { db } from '$lib/server/db';
 import { users, connections, points } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { rankFor } from '$lib/netz.js';
-import { getSettings, demoNow } from '$lib/server/settings.js';
 
-export async function load({ locals }) {
-	const me = locals.user;
+export function load({ locals }) {
+	// Sofort navigieren: Inhalt streamt nach (Skeleton im Frontend).
+	return { content: loadRangliste(locals.user) };
+}
+
+async function loadRangliste(me) {
 	const ws = me.workspaceId;
-	const settings = await getSettings();
+
+	// PERFORMANCE: unabhängige Abfragen gleichzeitig (Cloud-DB = je Abfrage ein Netzwerk-Weg).
+	const [allUsers, allConnsRaw, allPointsRaw] = await Promise.all([
+		db.select().from(users).where(eq(users.workspaceId, ws)).orderBy(users.id),
+		db.select().from(connections),
+		db.select().from(points)
+	]);
 
 	// Alles auf den eigenen Workspace beschränken
-	const allUsers = await db.select().from(users).where(eq(users.workspaceId, ws)).orderBy(users.id);
 	const usersById = Object.fromEntries(allUsers.map((u) => [u.id, u]));
 	const wsIds = new Set(allUsers.map((u) => u.id));
-	const allConns = (await db.select().from(connections)).filter(
-		(c) => wsIds.has(c.fromUserId) && wsIds.has(c.toUserId)
-	);
-	const allPoints = (await db.select().from(points)).filter((p) => wsIds.has(p.userId));
+	const allConns = allConnsRaw.filter((c) => wsIds.has(c.fromUserId) && wsIds.has(c.toUserId));
+	const allPoints = allPointsRaw.filter((p) => wsIds.has(p.userId));
 
 	// Punkte je Person
 	const ptsByUser = {};
 	for (const p of allPoints) ptsByUser[p.userId] = (ptsByUser[p.userId] ?? 0) + p.amount;
 
 	// Linien der letzten 7 Tage je Person (zählt für beide Enden)
-	const weekAgo = demoNow(settings).getTime() - 7 * 86400000;
+	const weekAgo = Date.now() - 7 * 86400000;
 	const weekLines = {};
 	const totalLines = {};
 	for (const c of allConns) {

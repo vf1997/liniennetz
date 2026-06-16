@@ -1,8 +1,9 @@
 import { defineConfig } from 'drizzle-kit';
 import { readFileSync } from 'node:fs';
+import { resolveDbConfig } from './src/lib/server/db/resolve.js';
 
 // Werte aus der Datei .env einlesen (ohne Zusatz-Bibliothek), damit
-// "npm run db:push" die Turso-Zugangsdaten findet.
+// "npm run db:push" DB_MODE und die Turso-Zugangsdaten findet.
 try {
 	for (const line of readFileSync('.env', 'utf8').split('\n')) {
 		const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
@@ -17,16 +18,14 @@ try {
 	// keine .env vorhanden – dann läuft alles lokal auf der Datei local.db
 }
 
-// Lokal arbeitet "npm run db:push" auf der Datei local.db.
-// Sind die Turso-Umgebungs-Variablen gesetzt, wird stattdessen die
-// gehostete Datenbank angepasst (für den Cloud-Betrieb).
-const useTurso = !!process.env.TURSO_DATABASE_URL;
+// Welche Datenbank? Gesteuert über DB_MODE (siehe resolve.js).
+// Tipp: zum Anpassen der Cloud-DB gezielt mit  DB_MODE=turso npm run db:push  ausführen.
+const cfg = resolveDbConfig(process.env);
 
 export default defineConfig({
 	schema: './src/lib/server/db/schema.js',
 	out: './drizzle',
-	dialect: useTurso ? 'turso' : 'sqlite',
-	dbCredentials: useTurso
-		? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
-		: { url: 'file:local.db' }
+	dialect: cfg.mode === 'turso' ? 'turso' : 'sqlite',
+	dbCredentials:
+		cfg.mode === 'turso' ? { url: cfg.url, authToken: cfg.authToken } : { url: cfg.url }
 });

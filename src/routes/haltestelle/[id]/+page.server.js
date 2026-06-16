@@ -24,16 +24,65 @@ function decoCosts(settings) {
 	};
 }
 
-export async function load({ params, locals }) {
+export function load({ params, locals }) {
+	// Sofort navigieren: Inhalt streamt nach (Skeleton im Frontend).
+	return { content: loadProfil(params, locals) };
+}
+
+async function loadProfil(params, locals) {
 	const id = Number(params.id);
-	const person = (await db.select().from(users).where(eq(users.id, id)))[0];
+	const viewer = locals.user;
+	const isSelf = viewer?.id === id;
+
+	// PERFORMANCE: alle voneinander unabhängigen Abfragen GLEICHZEITIG abschicken
+	// (Cloud-Datenbank = jede Abfrage ein Netzwerk-Weg → einmal warten statt neunmal).
+	const [
+		person,
+		settings,
+		allUsers,
+		myConnections,
+		myInterestRows,
+		viewerInterestRows,
+		pointRows,
+		budgets,
+		myTruths,
+		personGuesses,
+		viewerGuessRows
+	] = await Promise.all([
+		db
+			.select()
+			.from(users)
+			.where(eq(users.id, id))
+			.then((r) => r[0]),
+		getSettings(),
+		db.select().from(users),
+		db
+			.select()
+			.from(connections)
+			.where(or(eq(connections.fromUserId, id), eq(connections.toUserId, id))),
+		db.select().from(interests).where(eq(interests.userId, id)),
+		viewer
+			? db.select().from(interests).where(eq(interests.userId, viewer.id))
+			: Promise.resolve([]),
+		db.select().from(points).where(eq(points.userId, id)),
+		db.select().from(ticketBudgets).where(eq(ticketBudgets.userId, id)),
+		db
+			.select()
+			.from(truths)
+			.where(eq(truths.userId, id))
+			.then((r) => r[0] ?? null),
+		db.select().from(guesses).where(eq(guesses.userId, id)),
+		viewer
+			? db.select().from(guesses).where(eq(guesses.userId, viewer.id))
+			: Promise.resolve([])
+	]);
+
 	if (!person) throw error(404, 'Diese Haltestelle gibt es nicht.');
 	// Haltestellen aus fremden Workspaces sind nicht einsehbar.
-	if (locals.user && person.workspaceId !== locals.user.workspaceId) {
+	if (viewer && person.workspaceId !== viewer.workspaceId) {
 		throw error(404, 'Diese Haltestelle gibt es nicht.');
 	}
 
-	const settings = await getSettings();
 	const teamWert = settings.firmenwerte[0] ?? 'Füreinander da';
 	const costs = decoCosts(settings);
 	const decorations = DECORATIONS.map((d) => ({
@@ -43,24 +92,9 @@ export async function load({ params, locals }) {
 		cost: costs[d.key] ?? d.cost
 	}));
 
-	const allUsers = await db.select().from(users);
 	const userById = Object.fromEntries(allUsers.map((u) => [u.id, u]));
-
-	const myConnections = await db
-		.select()
-		.from(connections)
-		.where(or(eq(connections.fromUserId, id), eq(connections.toUserId, id)));
-
-	const myInterests = (await db.select().from(interests).where(eq(interests.userId, id))).map(
-		(r) => r.tag
-	);
-
-	const pts = (await db.select().from(points).where(eq(points.userId, id))).reduce(
-		(s, p) => s + p.amount,
-		0
-	);
-
-	const budgets = await db.select().from(ticketBudgets).where(eq(ticketBudgets.userId, id));
+	const myInterests = myInterestRows.map((r) => r.tag);
+	const pts = pointRows.reduce((s, p) => s + p.amount, 0);
 
 	// Roh-Kennzahlen für die Achievements (inkl. Fortschritt)
 	const partners = myConnections.map((c) => (c.fromUserId === id ? c.toUserId : c.fromUserId));
@@ -102,17 +136,13 @@ export async function load({ params, locals }) {
 		.reverse();
 
 	// Gemeinsamkeiten mit der gerade angemeldeten Person
-	const isSelf = locals.user?.id === id;
 	let sharedInterests = [];
-	if (!isSelf && locals.user) {
-		const viewerTags = (
-			await db.select().from(interests).where(eq(interests.userId, locals.user.id))
-		).map((r) => r.tag);
+	if (!isSelf && viewer) {
+		const viewerTags = viewerInterestRows.map((r) => r.tag);
 		sharedInterests = myInterests.filter((t) => viewerTags.includes(t));
 	}
 
 	// "Zwei Wahrheiten, eine Lüge"
-	const myTruths = (await db.select().from(truths).where(eq(truths.userId, id)))[0];
 	let truthGame = null;
 	if (isSelf) {
 		truthGame = {
@@ -124,14 +154,7 @@ export async function load({ params, locals }) {
 			lieIndex: myTruths ? myTruths.lieIndex : 0
 		};
 	} else if (myTruths) {
-		const g = locals.user
-			? (
-					await db
-						.select()
-						.from(guesses)
-						.where(and(eq(guesses.userId, locals.user.id), eq(guesses.targetUserId, id)))
-				)[0]
-			: null;
+		const g = viewerGuessRows.find((gg) => gg.targetUserId === id) ?? null;
 		truthGame = {
 			isSelf: false,
 			hasStatements: true,
@@ -143,7 +166,6 @@ export async function load({ params, locals }) {
 		};
 	}
 
-	const personGuesses = await db.select().from(guesses).where(eq(guesses.userId, id));
 	const correctGuesses = personGuesses.filter((g) => g.correct).length;
 
 	// Alle Achievements mit Fortschritt – erreichte UND noch offene (mit „x/y")

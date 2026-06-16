@@ -16,17 +16,19 @@ import {
 	sessions
 } from '../src/lib/server/db/schema.js';
 import { getWeekKey } from '../src/lib/netz.js';
+import { resolveDbConfig } from '../src/lib/server/db/resolve.js';
 
 /**
  * Füllt die Datenbank mit glaubwürdigen Beispiel-Daten,
  * damit "Liniennetz" sofort lebendig wirkt.
  * Ausführen mit:  npm run db:seed
  *
- * Sind in der .env die Turso-Zugangsdaten gesetzt, wird die Cloud-Datenbank
- * befüllt – sonst die lokale Datei local.db.
+ * Welche Datenbank befüllt wird, steuert DB_MODE (siehe resolve.js):
+ * lokal (Datei) oder Turso (Cloud). Zum gezielten Befüllen der Cloud:
+ *   DB_MODE=turso npm run db:seed
  */
 
-// .env einlesen (ohne Zusatz-Bibliothek), damit die Turso-Werte gefunden werden.
+// .env einlesen (ohne Zusatz-Bibliothek), damit DB_MODE und Turso-Werte gefunden werden.
 try {
 	for (const line of readFileSync('.env', 'utf8').split('\n')) {
 		const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
@@ -41,11 +43,10 @@ try {
 	// keine .env -> lokale Datei
 }
 
-const client = createClient({
-	url: process.env.TURSO_DATABASE_URL || 'file:local.db',
-	authToken: process.env.TURSO_AUTH_TOKEN || undefined
-});
+const dbCfg = resolveDbConfig(process.env);
+const client = createClient({ url: dbCfg.url, authToken: dbCfg.authToken });
 const db = drizzle(client);
+console.log(`→ Befülle ${dbCfg.mode === 'turso' ? 'die Turso-Cloud-Datenbank' : 'die lokale Datei local.db'} …`);
 
 // Vorhandene Daten leeren, damit erneutes Seeden sauber ERSETZT (nicht dupliziert).
 // Reihenfolge: erst abhängige Tabellen, dann die referenzierten.

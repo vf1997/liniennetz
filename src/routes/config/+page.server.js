@@ -22,7 +22,6 @@ export async function load({ url }) {
 	return {
 		groups,
 		values,
-		demoOffsetDays: s.demoOffsetDays,
 		login: {
 			mode: slack.mode,
 			clientId: s.slackClientId,
@@ -50,15 +49,6 @@ export const actions = {
 	zuruecksetzen: async () => {
 		await resetSettings();
 		return { reset: true };
-	},
-	// Demo-Zeitmaschine: Versatz in Tagen anpassen
-	demo: async ({ request }) => {
-		const data = await request.formData();
-		const delta = Number(data.get('delta') ?? 0);
-		const s = await getSettings();
-		const newOffset = (s.demoOffsetDays || 0) + delta;
-		await saveSettings({ demoOffsetDays: String(newOffset) });
-		return { saved: true };
 	},
 	// Anmelde-Modus umschalten und ggf. Slack-Zugangsdaten speichern
 	anmeldung: async ({ request }) => {

@@ -2,21 +2,17 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import { env } from '$env/dynamic/private';
 import * as schema from './schema.js';
+import { resolveDbConfig } from './resolve.js';
 
 /**
- * Verbindung zur Datenbank.
- *
- * - LOKAL (zum Entwickeln): einfach die Datei "local.db" im Projektordner.
- *   Kein Server, kein Internet, keine Zugangsdaten nötig.
- * - IN DER CLOUD (z. B. auf Vercel/Netlify gehostet): sind die Umgebungs-
- *   Variablen TURSO_DATABASE_URL und TURSO_AUTH_TOKEN gesetzt, verbindet sich
- *   die App stattdessen mit der gehosteten Turso-Datenbank ("SQLite in der Cloud").
- *
+ * Verbindung zur Datenbank. Welche genutzt wird, steuert die Umgebungs-Variable
+ * DB_MODE (siehe resolve.js):
+ *   DB_MODE=local  -> lokale Datei local.db (schnell, offline)
+ *   DB_MODE=turso  -> gehostete Turso-Datenbank
+ *   (nicht gesetzt) -> automatisch (Turso, falls Zugangsdaten vorhanden, sonst lokal)
  * Es ist exakt dieselbe Technik (@libsql/client) – nur die Adresse ändert sich.
  */
-
-const url = env.TURSO_DATABASE_URL || 'file:local.db';
-const authToken = env.TURSO_AUTH_TOKEN || undefined;
+const { url, authToken } = resolveDbConfig(env);
 
 const client = createClient({ url, authToken });
 

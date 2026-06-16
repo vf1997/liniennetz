@@ -154,47 +154,16 @@
 		</div>
 	</form>
 
-	<!-- Demo-Zeitmaschine -->
-	<section class="group demo-group">
-		<h2>🕰️ Demo-Zeitmaschine</h2>
-		<p class="demo-desc">
-			Verschiebt das interne Datum der App, damit du testen kannst, wie sich Wochen-Budgets,
-			Streaks und die Kür der Woche über die Zeit verändern. Die echte Uhr bleibt unberührt.
+	<!-- Live-Simulation -->
+	<section class="group sim-group">
+		<h2>🎬 Live-Simulation</h2>
+		<p class="sim-desc">
+			Zeig in einer Vorführung, wie das Liniennetz lebt: 8 Haltestellen starten ohne eine
+			einzige Verbindung – dann verschenken sie nach und nach Fahrscheine, und die Stadt wächst
+			vor deinen Augen vom Dorf bis zur Metropole. Rein zur Ansicht – deine echten Daten bleiben
+			unberührt.
 		</p>
-		<div class="demo-status">
-			{#if data.demoOffsetDays === 0}
-				<span class="demo-now">Heute · kein Versatz aktiv</span>
-			{:else}
-				<span class="demo-offset">
-					Versatz: <strong>{data.demoOffsetDays > 0 ? '+' : ''}{data.demoOffsetDays}
-						{Math.abs(data.demoOffsetDays) === 1 ? 'Tag' : 'Tage'}</strong>
-				</span>
-			{/if}
-		</div>
-		<div class="demo-btns">
-			<form method="POST" action="?/demo" use:enhance={enhanceSave}>
-				<input type="hidden" name="delta" value="-7" />
-				<button type="submit" class="demo-btn">− 7 Tage</button>
-			</form>
-			<form method="POST" action="?/demo" use:enhance={enhanceSave}>
-				<input type="hidden" name="delta" value="-1" />
-				<button type="submit" class="demo-btn">− 1 Tag</button>
-			</form>
-			<form method="POST" action="?/demo" use:enhance={enhanceSave}>
-				<input type="hidden" name="delta" value="1" />
-				<button type="submit" class="demo-btn">+ 1 Tag</button>
-			</form>
-			<form method="POST" action="?/demo" use:enhance={enhanceSave}>
-				<input type="hidden" name="delta" value="7" />
-				<button type="submit" class="demo-btn">+ 7 Tage</button>
-			</form>
-			<form method="POST" action="?/demo" use:enhance={enhanceSave}>
-				<input type="hidden" name="delta" value={-data.demoOffsetDays} />
-				<button type="submit" class="demo-btn reset-demo" disabled={data.demoOffsetDays === 0}>
-					Zurück zu Heute
-				</button>
-			</form>
-		</div>
+		<a href="/simulation" class="sim-btn">▶ Simulation starten</a>
 	</section>
 
 	<form method="POST" action="?/zuruecksetzen" use:enhance class="reset-form">
@@ -374,69 +343,32 @@
 		color: #b5462f;
 	}
 
-	/* Demo-Zeitmaschine */
-	.demo-group {
+	/* Live-Simulation */
+	.sim-group {
 		border-style: dashed;
 		border-color: #c8b8a0;
 	}
 
-	.demo-desc {
+	.sim-desc {
 		font-size: 0.88rem;
 		color: #79736a;
-		margin: 0 0 14px;
-		line-height: 1.45;
+		margin: 0 0 16px;
+		line-height: 1.5;
 	}
 
-	.demo-status {
-		margin-bottom: 14px;
+	.sim-btn {
+		display: inline-block;
+		background: #1a1a1a;
+		color: #f4f1ea;
+		text-decoration: none;
+		padding: 12px 22px;
+		border-radius: 10px;
+		font-weight: 600;
+		font-size: 0.95rem;
 	}
 
-	.demo-now {
-		font-size: 0.88rem;
-		color: #79736a;
-	}
-
-	.demo-offset {
-		font-size: 0.92rem;
-		color: #b5462f;
-	}
-
-	.demo-btns {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-
-	.demo-btns form {
-		display: contents;
-	}
-
-	.demo-btn {
-		background: #fff;
-		border: 1px solid #d8d0c0;
-		color: #1a1a1a;
-		padding: 9px 16px;
-		border-radius: 9px;
-		font-family: inherit;
-		font-size: 0.9rem;
-		cursor: pointer;
-		font-weight: 500;
-		transition: border-color 0.12s, background 0.12s;
-	}
-
-	.demo-btn:hover:not(:disabled) {
-		border-color: #b5462f;
-		background: #fdf0ee;
-	}
-
-	.demo-btn.reset-demo {
-		border-color: #b5462f;
-		color: #b5462f;
-	}
-
-	.demo-btn.reset-demo:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
+	.sim-btn:hover {
+		background: #b5462f;
 	}
 
 	/* Anmelde-Modus */
